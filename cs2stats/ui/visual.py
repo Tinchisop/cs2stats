@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
@@ -41,33 +41,163 @@ def svg_pixmap(path: Path | None, color: str, size: QSize) -> QPixmap:
 
 
 class Avatar(QLabel):
-    """Tu foto de Steam con esquinas redondeadas; si no hay foto, la inicial sobre el color de acento."""
+    """Foto de Steam con esquinas redondeadas (la tuya, o la de otro jugador si se pasa su archivo);
+    si no hay foto, la inicial sobre un color. ring: aro del color del equipo."""
 
-    def __init__(self, name: str, size: int = 64, parent=None):
+    def __init__(self, name: str, size: int = 64, parent=None, *, photo: bool | Path | None = True, color: str = ACCENT,
+                 circle: bool = False, ring: str = ""):
         super().__init__(parent)
         self.setFixedSize(size, size)
-        source = QPixmap(str(avatar_path())) if avatar_path().exists() else QPixmap()
+        file = avatar_path() if photo is True else photo or None
+        source = QPixmap(str(file)) if file and Path(file).exists() else QPixmap()
         canvas = QPixmap(size * 2, size * 2)
         canvas.setDevicePixelRatio(2)
         canvas.fill(Qt.GlobalColor.transparent)
         painter = QPainter(canvas)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(0, 0, size, size), size * 0.2, size * 0.2)
+        radius = size / 2 if circle else size * 0.2
+        path.addRoundedRect(QRectF(0, 0, size, size), radius, radius)
         painter.setClipPath(path)
         if not source.isNull():
             painter.drawPixmap(QRectF(0, 0, size, size), source, QRectF(source.rect()))
         else:
-            painter.fillRect(QRectF(0, 0, size, size), QColor(ACCENT))
+            painter.fillRect(QRectF(0, 0, size, size), QColor(color))
             painter.setPen(QColor("white"))
             painter.setFont(QFont("Segoe UI Variable Display", int(size * 0.42), QFont.Weight.Black))
             painter.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, (name or "?")[:1].upper())
         painter.setClipping(False)
-        painter.setPen(QPen(QColor(255, 255, 255, 40), 1.5))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawPath(path)
+        if ring:
+            painter.setPen(QPen(QColor(ring), 2))
+            inner = QPainterPath()
+            inner.addRoundedRect(QRectF(1, 1, size - 2, size - 2), radius - 1, radius - 1)
+            painter.drawPath(inner)
+        else:
+            painter.setPen(QPen(QColor(255, 255, 255, 40), 1.5))
+            painter.drawPath(path)
         painter.end()
         self.setPixmap(canvas)
+
+
+class MapThumb(QWidget):
+    """Foto oficial del mapa recortada con esquinas redondeadas (cabecera del detalle de partida)."""
+
+    def __init__(self, map_name: str, parent=None):
+        super().__init__(parent)
+        path = map_image(map_name)
+        self.image = QPixmap(str(path)) if path else QPixmap()
+        self.setFixedSize(184, 104)
+        self.setVisible(not self.image.isNull())
+
+    def paintEvent(self, _event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        clip = QPainterPath()
+        clip.addRoundedRect(rect, 12, 12)
+        painter.setClipPath(clip)
+        scaled = self.image.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                   Qt.TransformationMode.SmoothTransformation)
+        painter.drawPixmap(int((self.width() - scaled.width()) / 2), int((self.height() - scaled.height()) / 2), scaled)
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(255, 196, 140, 120), 1.5))
+        painter.drawRoundedRect(rect, 12, 12)
+
+
+class MapTitle(QWidget):
+    """Nombre del mapa en letras grandes con brillo metálico y sombra, como un título del juego."""
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self.font_ = QFont("Segoe UI Variable Display", 40, QFont.Weight.Black)
+        self.font_.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 96)
+        width = QFontMetrics(self.font_).horizontalAdvance(text)
+        self.setFixedSize(width + 12, 64)
+
+    def paintEvent(self, _event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addText(QPointF(2, 52), self.font_, self.text)
+        painter.translate(2, 3)
+        painter.fillPath(path, QColor(0, 0, 0, 170))  # sombra
+        painter.translate(-2, -3)
+        metal = QLinearGradient(0, 8, 0, 56)
+        metal.setColorAt(0, QColor("#ffffff"))
+        metal.setColorAt(0.45, QColor("#d9dce1"))
+        metal.setColorAt(0.52, QColor("#8f959e"))
+        metal.setColorAt(1, QColor("#c9ccd2"))
+        painter.fillPath(path, metal)
+        painter.setPen(QPen(QColor(255, 255, 255, 60), 0.8))
+        painter.drawPath(path)
+
+
+class PremierBadge(QWidget):
+    """Rating de Premier como lo muestra CS2: placa inclinada del color del rango, dos rayas a la izquierda
+    y el número en cursiva, con los miles grandes y el resto más chico (8,851)."""
+
+    def __init__(self, rating: int | None, height: int = 26, parent=None):
+        super().__init__(parent)
+        from ..benchmarks import tier_of
+        self.rating = int(rating) if rating else None
+        tier = tier_of(self.rating)
+        self.color = QColor(tier[3] if tier else "#5f6570")
+        self.big = QFont("Segoe UI Variable Display", max(8, int(height * 0.52)), QFont.Weight.Black)
+        self.big.setItalic(True)
+        self.small = QFont(self.big)
+        self.small.setPointSize(max(7, int(height * 0.38)))
+        if self.rating:
+            head, tail = (f"{self.rating // 1000}", f",{self.rating % 1000:03d}") if self.rating >= 1000 else (str(self.rating), "")
+        else:
+            head, tail = "---", ""
+        self.parts = (head, tail)
+        text_w = QFontMetrics(self.big).horizontalAdvance(head) + QFontMetrics(self.small).horizontalAdvance(tail)
+        self.slant = height * 0.27
+        self.setFixedSize(int(text_w + height * 1.25 + self.slant * 2), height)
+        self.setToolTip(f"{tier[2]} · Premier" if tier else "")
+
+    def paintEvent(self, _event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h, s = self.width(), self.height(), self.slant
+
+        def parallelogram(x0: float, x1: float) -> QPainterPath:
+            path = QPainterPath(QPointF(x0 + s, 0.5))
+            path.lineTo(x1, 0.5)
+            path.lineTo(x1 - s, h - 0.5)
+            path.lineTo(x0, h - 0.5)
+            path.closeSubpath()
+            return path
+        body = parallelogram(0, w)
+        fill = QLinearGradient(0, 0, w, 0)
+        dark = QColor(self.color)
+        dark.setAlpha(70)
+        fill.setColorAt(0, dark)
+        dark.setAlpha(18)
+        fill.setColorAt(1, dark)
+        painter.fillPath(body, QColor("#121419"))
+        painter.fillPath(body, fill)
+        edge = QColor(self.color)
+        edge.setAlpha(150)
+        painter.setPen(QPen(edge, 1))
+        painter.drawPath(body)
+        # Las dos rayas de la izquierda.
+        stripe = h * 0.16
+        for index in range(2):
+            x = h * 0.18 + index * stripe * 1.9
+            painter.fillPath(parallelogram(x, x + stripe + s), self.color if index == 0 else self.color.darker(130))
+        painter.setPen(self.color)
+        x = h * 0.18 + stripe * 3.8 + s * 0.6
+        head, tail = self.parts
+        baseline = (h + QFontMetrics(self.big).capHeight()) / 2  # las dos partes sobre la misma línea
+        painter.setFont(self.big)
+        painter.drawText(QPointF(x, baseline), head)
+        x += QFontMetrics(self.big).horizontalAdvance(head)
+        painter.setFont(self.small)
+        painter.drawText(QPointF(x, baseline), tail)
 
 
 class MapCard(QWidget):

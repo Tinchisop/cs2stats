@@ -169,6 +169,61 @@ def icon(kind: str, color: str = MUTED, size: int = 20) -> QIcon:
         painter.drawLine(QPointF(11, 13), QPointF(20, 4))
         painter.drawLine(QPointF(14, 4), QPointF(20, 4))
         painter.drawLine(QPointF(20, 4), QPointF(20, 10))
+    elif kind == "duel":
+        for a, b, g1, g2 in (((4, 4), (17, 17), (13, 19), (19, 13)), ((20, 4), (7, 17), (11, 19), (5, 13))):
+            painter.drawLine(QPointF(*a), QPointF(*b))
+            painter.drawLine(QPointF(*g1), QPointF(*g2))
+    elif kind == "shield":
+        path = QPainterPath(QPointF(12, 2.5))
+        path.cubicTo(QPointF(15, 4.5), QPointF(18, 5), QPointF(20, 5))
+        path.cubicTo(QPointF(20, 13), QPointF(17, 18.5), QPointF(12, 21.5))
+        path.cubicTo(QPointF(7, 18.5), QPointF(4, 13), QPointF(4, 5))
+        path.cubicTo(QPointF(6, 5), QPointF(9, 4.5), QPointF(12, 2.5))
+        painter.drawPath(path)
+        painter.drawRoundedRect(QRectF(9, 11, 6, 5), 1, 1)
+        painter.drawArc(QRectF(10, 8, 4, 5), 0, 180 * 16)
+    elif kind == "skull":
+        painter.drawArc(QRectF(4, 2.5, 16, 15), -20 * 16, 220 * 16)
+        painter.drawLine(QPointF(5.2, 13.5), QPointF(8, 16.5))
+        painter.drawLine(QPointF(18.8, 13.5), QPointF(16, 16.5))
+        painter.drawLine(QPointF(8, 16.5), QPointF(8, 20.5))
+        painter.drawLine(QPointF(16, 16.5), QPointF(16, 20.5))
+        painter.drawLine(QPointF(8, 20.5), QPointF(16, 20.5))
+        painter.setBrush(QColor(color))
+        painter.drawEllipse(QRectF(7.5, 9, 3.5, 3.5))
+        painter.drawEllipse(QRectF(13, 9, 3.5, 3.5))
+    elif kind == "flash":
+        painter.drawRoundedRect(QRectF(7, 8, 9, 13), 2, 2)
+        painter.drawLine(QPointF(9, 8), QPointF(9, 5.5))
+        painter.drawLine(QPointF(9, 5.5), QPointF(14, 5.5))
+        for a, b in (((18, 6), (21, 3.5)), ((18.5, 9.5), (22, 9.5)), ((17, 3.5), (17.5, 1.5))):
+            painter.drawLine(QPointF(*a), QPointF(*b))
+    elif kind == "burst":
+        path = QPainterPath(QPointF(12, 2))
+        for x, y in ((14, 8), (20, 5), (17, 11), (22, 14), (16, 15), (17, 21), (12, 17), (7, 21), (8, 15), (2, 14),
+                     (7, 11), (4, 5), (10, 8)):
+            path.lineTo(x, y)
+        path.closeSubpath()
+        painter.drawPath(path)
+    elif kind == "swap":
+        painter.drawLine(QPointF(3.5, 8), QPointF(19, 8))
+        painter.drawLine(QPointF(15, 4), QPointF(19, 8))
+        painter.drawLine(QPointF(15, 12), QPointF(19, 8))
+        painter.drawLine(QPointF(20.5, 16), QPointF(5, 16))
+        painter.drawLine(QPointF(9, 12), QPointF(5, 16))
+        painter.drawLine(QPointF(9, 20), QPointF(5, 16))
+    elif kind in ("down", "up"):
+        painter.setPen(QPen(QColor(color), 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        for y in (5, 12):
+            a, b = (y, y + 6) if kind == "down" else (y + 6, y)
+            painter.drawPolyline([QPointF(5, a), QPointF(12, b), QPointF(19, a)])
+    elif kind == "crown":
+        path = QPainterPath(QPointF(3.5, 18))
+        for x, y in ((2.5, 7), (8, 11.5), (12, 4.5), (16, 11.5), (21.5, 7), (20.5, 18)):
+            path.lineTo(x, y)
+        path.closeSubpath()
+        painter.setBrush(QColor(color))
+        painter.drawPath(path)
     else:
         painter.setBrush(QColor(color))
         painter.drawEllipse(QRectF(9, 9, 6, 6))
@@ -239,6 +294,47 @@ QFrame#badCard {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #19
                   border: 1px solid #262b33; border-left: 3px solid {BAD}; border-radius: 12px; }}
 QFrame#heroCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1d1a22, stop:0.5 #171a21, stop:1 #191520);
                    border: 1px solid #3a2a33; border-radius: 16px; }}
+QFrame#playerCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #221d18, stop:0.55 #1a1c22, stop:1 #241820);
+                     border: 1px solid #5a4630; border-radius: 16px; }}
+QFrame#tableHead {{ background: #1c2027; border-radius: 8px; }}
+QLabel#tableHeadText {{ color: {MUTED}; font-size: 12px; font-weight: 700; }}
+QLabel#tableSection {{ color: {MUTED}; font-size: 12px; font-weight: 800; letter-spacing: 1px; padding: 10px 12px 4px 12px; }}
+QFrame#rowAlly {{ background: rgba(90,169,255,10); border: 1px solid #22272f; border-left: 3px solid {CT_COLOR}; border-radius: 8px; }}
+QFrame#rowRival {{ background: rgba(240,162,75,10); border: 1px solid #2b2620; border-left: 3px solid {T_COLOR}; border-radius: 8px; }}
+QFrame#rowMe {{ background: rgba(255,79,123,30); border: 1px solid {ACCENT}; border-left: 3px solid {ACCENT}; border-radius: 8px; }}
+QFrame#rowBest {{ background: rgba(63,207,142,16); border: 1px solid {GOOD}; border-left: 3px solid {GOOD}; border-radius: 8px; }}
+QLabel#meChip {{ color: white; background: {ACCENT}; border-radius: 5px; padding: 1px 6px; font-size: 11px; font-weight: 800; }}
+QFrame#tile {{ background: #1c2027; border: 1px solid #2a2f37; border-radius: 10px; }}
+QFrame#tileGood {{ background: #18212c; border: 1px solid #36608f; border-radius: 10px; }}
+QFrame#tileBad {{ background: #2a181c; border: 1px solid #7a3340; border-radius: 10px; }}
+QFrame#tileUtil {{ background: #231e17; border: 1px solid #5f4424; border-radius: 10px; }}
+QLabel#matchMap {{ font-family: 'Segoe UI Variable Display'; font-size: 44px; font-weight: 800; }}
+QLabel#matchScore {{ font-family: 'Segoe UI Variable Display'; font-size: 26px; font-weight: 800; }}
+QLabel#cardPlayer {{ font-family: 'Segoe UI Variable Display'; font-size: 22px; font-weight: 700; }}
+QLabel#resultWin, QLabel#resultLoss, QLabel#resultTie {{ font-family: 'Segoe UI Variable Display'; font-size: 20px; font-weight: 800;
+                                                        border-radius: 6px; padding: 2px 12px; }}
+QLabel#resultWin {{ color: {GOOD}; background: #15241d; border: 1px solid #24432f; }}
+QLabel#resultLoss {{ color: #ffd9de; background: #4a1c24; border: 1px solid #7a3340; }}
+QLabel#resultTie {{ color: {MID}; background: #2a2416; border: 1px solid #4d4126; }}
+QPushButton#tabButton {{ background: rgba(255,255,255,8); border: 1px solid rgba(255,255,255,18); border-bottom: 3px solid transparent;
+                         border-radius: 0; border-top-left-radius: 8px; border-top-right-radius: 8px;
+                         padding: 9px 18px; color: #aeb3bc; font-size: 15px; font-weight: 700; }}
+QPushButton#tabButton:hover {{ color: {TEXT}; background: rgba(255,255,255,16); }}
+QPushButton#tabButton:checked {{ color: #ff6b8f; border-color: rgba(255,79,123,90); border-bottom: 3px solid {ACCENT};
+                                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255,79,123,10), stop:1 rgba(255,79,123,55)); }}
+QDialog#matchDialog QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(28,32,40,232), stop:1 rgba(20,22,28,240));
+                                   border: 1px solid rgba(255,79,123,95); border-radius: 16px; }}
+QDialog#matchDialog QFrame#playerCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(40,34,30,225), stop:0.6 rgba(26,28,34,225), stop:1 rgba(48,24,32,225));
+                                         border: 1px solid #6a5238; border-radius: 18px; }}
+QFrame#tableHeadLeft {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1d5fc0, stop:1 #2a74d6);
+                        border-top-left-radius: 8px; border-bottom-left-radius: 8px; }}
+QFrame#tableHeadRight {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2a74d6, stop:0.12 #e98f35, stop:1 #e0582e);
+                         border-top-right-radius: 8px; border-bottom-right-radius: 8px; }}
+QFrame#tableHeadLeft QLabel#tableHeadText, QFrame#tableHeadRight QLabel#tableHeadText {{ color: #ffffff; font-size: 13px; font-weight: 800; }}
+QFrame#identityCard {{ background: #17191e; border: 1px solid #3a2a33; border-radius: 14px; }}
+QFrame#identityHead {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #6a2230, stop:1 #24161b);
+                       border: none; border-top-left-radius: 14px; border-top-right-radius: 14px; }}
+QLabel#identityChip {{ color: #ffd9de; background: #c23a4f; border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; }}
 QLabel#navBadge {{ background: {BAD}; color: white; border-radius: 9px; font-size: 10px; font-weight: 800;
                    min-width: 18px; max-width: 18px; min-height: 18px; max-height: 18px; qproperty-alignment: AlignCenter; }}
 QFrame#notice {{ background: #221a1e; border: 1px solid #4a2a35; border-radius: 10px; }}

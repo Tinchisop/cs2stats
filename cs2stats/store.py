@@ -108,7 +108,7 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         columns = {row[1] for row in self.db.execute("PRAGMA table_info(matches)")}
-        for column in ("grenades_json", "grid_json"):
+        for column in ("grenades_json", "grid_json", "aim_json", "detail_json"):
             if column not in columns:
                 self.db.execute(f"ALTER TABLE matches ADD COLUMN {column} TEXT")
         self.db.commit()
@@ -124,12 +124,15 @@ class Store:
             cursor = self.db.execute(
                 """INSERT INTO matches (match_key, steamid, source, map, played_at, file_name, rounds_n, score_us,
                    score_them, result, my_name, rank_type, rank_old, rank_new, rank_change, rounds_json, weapons_json,
-                   scoreboard_json, imported_at, grenades_json, grid_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   scoreboard_json, imported_at, grenades_json, grid_json, aim_json, detail_json)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (match["match_key"], match["steamid"], match["source"], match["map"], played_at, file_name,
                  len(match["rounds"]), match["score_us"], match["score_them"], match["result"], match["my_name"],
                  rank["type"], rank["old"], rank["new"], rank["change"], json.dumps(match["rounds"]),
                  json.dumps(match["weapons"]), json.dumps(match["scoreboard"]), datetime.now().isoformat(timespec="seconds"),
-                 json.dumps(match.get("grenades") or []), json.dumps(match.get("grid") or [])))
+                 json.dumps(match.get("grenades") or []), json.dumps(match.get("grid") or []),
+                 json.dumps(match["aim"]) if "aim" in match else None,
+                 json.dumps(match["detail"]) if "detail" in match else None))
             self.db.commit()
             match_id = int(cursor.lastrowid)
         self.link_gsi(match_id, match["map"], played_at)
@@ -147,6 +150,10 @@ class Store:
             item["rounds"] = json.loads(item.pop("rounds_json") or "[]")
             item["weapons"] = json.loads(item.pop("weapons_json") or "{}")
             item["scoreboard"] = json.loads(item.pop("scoreboard_json") or "[]")
+            aim = item.pop("aim_json")
+            item["aim"] = json.loads(aim) if aim is not None else None  # None: se importó antes de medir la puntería
+            detail = item.pop("detail_json")
+            item["detail"] = json.loads(detail) if detail is not None else None  # impacto, duelos y utilidad
             for r in item["rounds"]:
                 r["match_id"] = item["id"]
                 r["map"] = item["map"]
@@ -159,6 +166,25 @@ class Store:
             rows = self.db.execute("SELECT map, played_at, grenades_json, grid_json FROM matches").fetchall()
         return [{"map": r[0], "played_at": r[1], "grenades": json.loads(r[2] or "[]"), "grid": json.loads(r[3] or "[]")}
                 for r in rows]
+
+    def refresh_match(self, match_id: int, match: dict | None) -> None:
+        """Guarda lo que sale de volver a leer la demo con el lector nuevo. Sin demo, queda marcada como no disponible."""
+        with self.lock:
+            if match is None:
+                self.db.execute("UPDATE matches SET aim_json=COALESCE(aim_json, '{}'), detail_json='{}' WHERE id=?", (match_id,))
+            else:
+                self.db.execute("UPDATE matches SET rounds_json=?, weapons_json=?, scoreboard_json=?, aim_json=?, detail_json=? "
+                                "WHERE id=?", (json.dumps(match["rounds"]), json.dumps(match["weapons"]),
+                                              json.dumps(match["scoreboard"]), json.dumps(match["aim"]),
+                                              json.dumps(match["detail"]), match_id))
+            self.db.commit()
+
+    def demo_sources(self, match_key: str) -> tuple[str, str]:
+        """Dónde volver a buscar la demo de una partida: el archivo en la PC y la URL de Valve."""
+        with self.lock:
+            path = self.db.execute("SELECT path FROM files WHERE match_key=? AND status='importada'", (match_key,)).fetchone()
+            url = self.db.execute("SELECT demo_url FROM sharecodes WHERE match_key=? AND demo_url IS NOT NULL", (match_key,)).fetchone()
+        return (path[0] if path else ""), (url[0] if url else "")
 
     def delete_match(self, match_id: int) -> None:
         with self.lock:

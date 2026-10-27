@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .i18n import t
 
+import math
 from collections import Counter
 from typing import Iterable
 
@@ -105,6 +106,113 @@ def summarize(rounds: Iterable[dict]) -> dict:
         "util_adr": ratio(sum(r["util_damage"] for r in rounds), n),
         "flashes_per_round": ratio(flashes, n),
         "blinded_per_flash": ratio(sum(r["enemies_flashed"] for r in rounds), flashes),
+        "he_damage": sum(r.get("he_damage", 0) for r in rounds),
+        "he_team_damage": sum(r.get("he_team_damage", 0) for r in rounds),
+    }
+
+
+def scale_value(value: float | None, worst: float, best: float) -> float | None:
+    """0 a 100 entre el peor y el mejor valor razonable (sirve aunque menos sea mejor)."""
+    if value is None:
+        return None
+    return max(0.0, min(100.0, (value - worst) / (best - worst) * 100))
+
+
+# Peor y mejor valor de cada parte de la nota de puntería.
+AIM_SCALE = {"time_to_damage": (800, 300), "crosshair": (10, 2), "head_accuracy": (0.05, 0.40),
+             "seen_accuracy": (0.12, 0.42), "counter_strafe": (0.45, 0.95), "spray_accuracy": (0.10, 0.45)}
+
+
+def aim_rating(aim: dict | None) -> float | None:
+    """Nota de puntería de 0 a 100: promedio de reacción, mira, cabeza, precisión, counter-strafe y ráfaga."""
+    if not aim or not aim.get("shots"):
+        return None
+    parts = [scale_value(aim.get(key), *limits) for key, limits in AIM_SCALE.items()]
+    parts = [p for p in parts if p is not None]
+    return sum(parts) / len(parts) if parts else None
+
+
+def utility_rating(stats: dict, unused: list | None = None) -> dict:
+    """Nota de utilidad de 0 a 100 = raíz de (cantidad × calidad), como la de Leetify.
+
+    Cantidad: granadas por ronda. Calidad: cuánto cegaron las flashes, el daño de las HE y cuántos compañeros cegaste."""
+    rounds = max(1, stats.get("rounds") or 0)
+    thrown = stats.get("util_thrown") or 0
+    flashes, hes = stats.get("flashes") or 0, stats.get("hes") or 0
+    enemies = stats.get("enemies_flashed") or 0
+    blind = ratio(stats.get("blind_time") or 0, enemies)
+    he_avg = ratio(stats.get("he_damage") or 0, hes)
+    per_flash = ratio(enemies, flashes)
+    friends = ratio(stats.get("team_flashed") or 0, flashes)
+    quantity = 100 * (1 - math.exp(-0.7 * thrown / rounds))
+    score = 0.6 * (per_flash or 0) * (blind or 0) + 0.6 * (he_avg or 0) / 20 - 0.3 * (friends or 0)
+    quality = 100 * (1 - math.exp(-0.6 * max(0.0, score))) if thrown else 0.0
+    return {
+        "rating": math.sqrt(quantity * quality), "quality": quality, "quantity": quantity,
+        "flash_assists": stats.get("flash_assists") or 0, "enemies_per_flash": per_flash, "friends_per_flash": friends,
+        "blind_time": blind, "he_avg": he_avg, "he_team_avg": ratio(stats.get("he_team_damage") or 0, hes),
+        "flashes": flashes, "smokes": stats.get("smokes") or 0, "hes": hes, "molotovs": stats.get("molotovs") or 0,
+        "unused": ratio(unused[0], unused[1]) if unused else None,
+    }
+
+
+def impact_rating(entry: dict | None) -> dict:
+    """Impacto (como el rating de Leetify): cuánto movés la probabilidad de ganar de tu equipo, promedio por ronda × 100."""
+    if not entry or not entry.get("rounds"):
+        return {"total": None, "T": None, "CT": None, "cats": {}, "rounds": {}}
+    rounds, sides = entry["rounds"], entry.get("sides", {})
+
+    def mean(values: list[float]) -> float | None:
+        return sum(values) / len(values) * 100 if values else None
+    return {"total": mean(list(rounds.values())),
+            "T": mean([v for n, v in rounds.items() if sides.get(n) == "T"]),
+            "CT": mean([v for n, v in rounds.items() if sides.get(n) == "CT"]),
+            "cats": {k: v * 100 for k, v in entry.get("cats", {}).items()},
+            "rounds": {int(n): v * 100 for n, v in rounds.items()}, "sides": {int(n): s for n, s in sides.items()}}
+
+
+def player_numbers(match: dict, steamid) -> dict:
+    """Todos los números de un jugador en una partida (los de la tabla, la puntería, la utilidad y el impacto)."""
+    row = next((p for p in match.get("scoreboard", []) if str(p["steamid"]) == str(steamid)), None)
+    if not row:
+        return {}
+    stats = row.get("stats") or {}
+    detail = match.get("detail") or {}
+    aim = aim_summary((match.get("aim") or {}).get(str(steamid))) or {}
+    util = utility_rating(stats, (detail.get("unused") or {}).get(str(steamid)))
+    impact = impact_rating((detail.get("impact") or {}).get(str(steamid)))
+    if impact["total"] is not None and len(impact["rounds"]) < (stats.get("rounds") or 0):
+        # Si estuvo conectado pero sin jugar (desconectado o AFK), esas rondas también cuentan para el promedio.
+        impact["total"] = sum(impact["rounds"].values()) / stats["rounds"]
+    rounds = max(1, stats.get("rounds") or 0)
+    return {
+        "impact": impact["total"], "impact_t": impact["T"], "impact_ct": impact["CT"],
+        "aim_rating": aim_rating(aim), "utility_rating": util["rating"] if stats.get("util_thrown") is not None else None,
+        "rating": row.get("rating"), "kills": row["kills"], "deaths": row["deaths"], "assists": row["assists"],
+        "kd": row["kills"] / row["deaths"] if row["deaths"] else float(row["kills"]), "adr": row["adr"],
+        "kast": stats.get("kast"), "hs": row["hs"] / row["kills"] if row["kills"] else None,
+        "opening_attempts": ratio(stats.get("opening_duels") or 0, rounds), "opening_kills": stats.get("opening_kills"),
+        "clutches_won": stats.get("clutches_won"), "trade_kills": stats.get("trade_kills"),
+        "enemies_flashed": stats.get("enemies_flashed"), "util_damage": stats.get("util_damage"),
+        **{key: aim.get(key) for key in ("time_to_damage", "crosshair", "head_accuracy", "seen_accuracy", "counter_strafe",
+                                          "spray_accuracy", "accuracy")},
+    }
+
+
+def aim_summary(raw: dict | None) -> dict | None:
+    """Puntería de un jugador a partir de las cuentas crudas de la demo (se pueden sumar entre partidas)."""
+    if not raw:
+        return None
+    return {
+        "seen_accuracy": ratio(raw["seen_hits"], raw["seen_shots"]),
+        "time_to_damage": ratio(raw["ttd_sum"], raw["ttd_n"]),
+        "crosshair": ratio(raw["xhair_sum"], raw["xhair_n"]),
+        "head_accuracy": ratio(raw["head_hits"], raw["gun_hits"]),
+        "first_bullet": ratio(raw["first_hits"], raw["first_shots"]),
+        "spray_accuracy": ratio(raw["spray_hits"], raw["spray_shots"]),
+        "counter_strafe": ratio(raw["strafe_ok"], raw["strafe_shots"]),
+        "accuracy": ratio(raw["hits"], raw["shots"]),
+        "shots": raw["shots"],
     }
 
 

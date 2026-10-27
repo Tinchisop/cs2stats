@@ -103,6 +103,59 @@ def extract_game_assets(force: bool = False) -> bool:
     return True
 
 
+AVATAR_MAX_AGE = 7 * 86400   # las fotos de los demás jugadores se vuelven a bajar una vez por semana
+
+
+def player_avatar(steamid) -> Path | None:
+    """Foto de perfil guardada de otro jugador (la de Steam, pública)."""
+    path = assets_dir() / "avatares" / f"{steamid}.jpg"
+    return path if path.exists() else None
+
+
+def download_player_avatars(steamids, api_key: str = "") -> int:
+    """Baja las fotos de perfil públicas de los jugadores que faltan o están viejas. Devuelve cuántas bajó.
+
+    Con clave de Web API pide 100 jugadores por consulta; sin clave, lee el perfil público de cada uno en XML."""
+    import json
+    import time
+    folder = assets_dir() / "avatares"
+    folder.mkdir(exist_ok=True)
+    now = time.time()
+    wanted = []
+    for steamid in {str(s) for s in steamids if s}:
+        path = folder / f"{steamid}.jpg"
+        if not path.exists() or now - path.stat().st_mtime > AVATAR_MAX_AGE:
+            wanted.append(steamid)
+    urls: dict[str, str] = {}
+    if api_key:
+        for start in range(0, len(wanted), 100):
+            batch = ",".join(wanted[start:start + 100])
+            query = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={api_key}&steamids={batch}"
+            try:
+                with urllib.request.urlopen(query, timeout=15) as response:
+                    for player in json.loads(response.read())["response"]["players"]:
+                        urls[str(player["steamid"])] = player.get("avatarfull") or player.get("avatarmedium") or ""
+            except (OSError, ValueError, KeyError) as error:
+                log.warning("No se pudieron pedir las fotos de los jugadores: %s", error)
+                break
+    done = 0
+    for steamid in wanted:
+        url = urls.get(steamid, "")
+        try:
+            if not url and not api_key:
+                with urllib.request.urlopen(f"https://steamcommunity.com/profiles/{steamid}/?xml=1", timeout=15) as response:
+                    found = re.search(rb"<avatarFull><!\[CDATA\[(.*?)\]\]>", response.read())
+                    url = found.group(1).decode() if found else ""
+            if not url:
+                continue
+            with urllib.request.urlopen(url, timeout=15) as response:
+                (folder / f"{steamid}.jpg").write_bytes(response.read())
+            done += 1
+        except (OSError, ValueError) as error:
+            log.warning("No se pudo bajar la foto de %s: %s", steamid, error)
+    return done
+
+
 def download_avatar(steamid: int, api_key: str = "") -> bool:
     """Baja tu foto de perfil de Steam (la pública). Usa la Web API si hay clave; si no, el perfil en XML."""
     url = ""

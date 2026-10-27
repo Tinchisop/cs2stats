@@ -23,13 +23,14 @@ from ..store import PARSER_VERSION, Settings, Store, data_dir
 from ..i18n import LANGUAGES, language, t
 from ..resumen import match_message
 from ..sync import reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
-from ..assets import avatar_path, download_avatar, extract_game_assets
+from ..assets import avatar_path, download_avatar, download_player_avatars, extract_game_assets
 from ..nades import build_lineups
 from ..recorder import RecorderError, cs2_running, ffmpeg_path, launch_practice, record_lineups
 from .connect import ConnectPage, DemosPage, LoginDialog
+from .match import MatchDialog
 from .nades_page import NadesPage
-from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchDialog, MatchesPage, ProfilePage, RankPage,
-                    UtilityPage, WeaponsPage)
+from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchesPage, ProfilePage, RankPage, UtilityPage,
+                    WeaponsPage)
 from .theme import BAD, GOOD, MUTED, STYLE, app_icon, fmt_num, icon, label
 
 RUN_KEY = t(r"Software\Microsoft\Windows\CurrentVersion\Run")
@@ -181,7 +182,8 @@ def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
         rows.append({"id": m["id"], "played_at": m["played_at"], "mode": m["source"], "map": m["map"], "result": m["result"],
                      "us": m["score_us"], "them": m["score_them"], "k": s["kills"], "a": s["assists"], "d": s["deaths"],
                      "adr": s["adr"], "hs": (s["hs"] or 0) * 100 if s["hs"] is not None else None, "rating": s["rating"],
-                     "premier": premier})
+                     "premier": premier, "premier_value": m.get("rank_new") if m.get("rank_type") == 11 else None,
+                     "premier_change": m.get("rank_change")})
 
     def same(h: dict, m: dict) -> bool:
         if map_label(m["map"]).lower() != h["map"].lower():
@@ -585,6 +587,7 @@ class MainWindow(QMainWindow):
             if not self.isVisible():
                 self.tray.showMessage(t("CS2 Stats"), t('Importé {0} {1} de Steam.').format(imported, t('partida') if imported == 1 else t('partidas')),
                                       app_icon(), 6000)
+            self.load_assets()  # fotos de los jugadores de las partidas nuevas
         self.refresh()
         self.refresh_connect()
 
@@ -612,10 +615,14 @@ class MainWindow(QMainWindow):
         old_avatar = not avatar.exists() or (datetime.now().timestamp() - avatar.stat().st_mtime) > 86400
         steamid, key = self.settings["steamid"], self.settings.secret("api_key")
 
+        # Fotos de los demás jugadores de tus últimas partidas (las que falten o tengan más de una semana).
+        others = {p["steamid"] for m in self.store.matches(steamid)[-40:] for p in m["scoreboard"] if not p.get("me")}
+
         def task(_say):
             extract_game_assets()
             if old_avatar:
                 download_avatar(steamid, key)
+            download_player_avatars(others, key)
             return True
         self.assets_runner.start(task)
 
@@ -738,7 +745,7 @@ class MainWindow(QMainWindow):
     def open_match(self, match_id: int) -> None:
         match = next((m for m in self.view["all_matches"] if m["id"] == match_id), None)
         if match:
-            dialog = MatchDialog(match, self)
+            dialog = MatchDialog(match, self, self.view["all_matches"])
             dialog.setStyleSheet(STYLE)
             dialog.exec()
 

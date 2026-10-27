@@ -7,7 +7,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
-from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QLabel, QMenu, QPushButton, QScrollArea, QSizePolicy, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -15,8 +15,8 @@ from ..i18n import t
 from ..benchmarks import BY_KEY, tier_label
 from ..insights import Insight, analyze
 from ..metrics import SOURCE_NAMES, by_key, map_label, summarize, weapon_label
-from .charts import BarList, ColumnChart, MatchPills, PercentileBar, RoundStrip, SideCompare, TrendChart
-from .visual import Avatar, MapCard, WeaponRow
+from .charts import BarList, ColumnChart, MatchPills, PercentileBar, SideCompare, TrendChart
+from .visual import Avatar, MapCard, PremierBadge, WeaponRow
 from .theme import (ACCENT, BAD, CT_COLOR, GOOD, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num,
                     fmt_pct, label, panel, rating_color, score_color)
 
@@ -138,17 +138,31 @@ def result_text(result: str, us: int, them: int) -> tuple[str, str]:
     return f"{us} : {them}", GOOD if result == "W" else BAD if result == "L" else MUTED
 
 
-def premier_badge(rating: int | None, tier: tuple | None, big: bool = False) -> QLabel:
-    color = tier[3] if tier else MUTED
-    text = fmt_num(rating, 0) if rating else t("Sin rating")
-    widget = QLabel(text)
-    size = 20 if big else 12
-    widget.setStyleSheet(f"color: {color}; background: #1b1d23; border: 1px solid {color}; border-left: 5px solid {color};"
-                         f"border-radius: 6px; padding: {t('4px 12px') if big else t('2px 10px')}; font-family: 'Segoe UI Variable Display';"
-                         f"font-size: {size}px; font-weight: 800; font-style: italic;")
-    widget.setMinimumHeight(34 if big else 24)
-    widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    return widget
+def premier_badge(rating: int | None, tier: tuple | None, big: bool = False) -> QWidget:
+    """Tu rating de Premier con la placa del juego (o "Sin rating" si todavía no tenés)."""
+    if not rating:
+        widget = label(t("Sin rating"), "chip")
+        widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        return widget
+    return PremierBadge(rating, 36 if big else 30)
+
+
+def premier_cell(rating: int | None, change: float | None = None, height: int = 24) -> QWidget:
+    """Celda de tabla con la placa de Premier y, si se pasa, cuánto subió o bajó."""
+    holder = QWidget()
+    row = QHBoxLayout(holder)
+    row.setContentsMargins(6, 0, 6, 0)
+    row.setSpacing(6)
+    if rating:
+        row.addWidget(PremierBadge(rating, height))
+        if change is not None:
+            delta = label(f"{change:+.0f}", "smallMuted")
+            delta.setStyleSheet(f"color: {GOOD if change >= 0 else BAD}; font-weight: 700;")
+            row.addWidget(delta)
+    else:
+        row.addWidget(label("—", "smallMuted"))
+    row.addStretch(1)
+    return holder
 
 
 def delta_chip(comp, compact: bool = False) -> QLabel:
@@ -421,8 +435,10 @@ class MatchesPage(Page):
         box, layout = card(t("Todas tus partidas"), t("Clic en una partida con demo para ver ronda por ronda"))
         self.table = table(self.HEADERS)
         header = self.table.horizontalHeader()
-        for col in range(4, 12):
+        for col in range(4, 11):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(11, QHeaderView.ResizeMode.Fixed)  # placa de Premier
+        self.table.setColumnWidth(11, 130)
         self.table.cellClicked.connect(self._open)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._menu)
@@ -449,10 +465,13 @@ class MatchesPage(Page):
                       cell(str(r["k"]), center=True), cell(str(r["a"]), center=True), cell(str(r["d"]), center=True),
                       cell(f"{diff:+d}", GOOD if diff > 0 else BAD if diff < 0 else MUTED, center=True),
                       cell(fmt_num(r.get("adr"), 0), center=True), cell(f"{r['hs']:.0f} %" if r.get("hs") is not None else "—", center=True),
-                      rating_cell(r.get("rating")), cell(r.get("premier", ""), CT_COLOR),
+                      rating_cell(r.get("rating")), cell(""),
                       cell(t("Demo") if r.get("id") else t("Steam"), TEXT if r.get("id") else SUBTLE)]
             for col, item in enumerate(values):
                 self.table.setItem(index, col, item)
+            # Premier con la placa del juego.
+            self.table.setCellWidget(index, 11, premier_cell(r.get("premier_value"), r.get("premier_change"), 22)
+                                     if r.get("premier_value") else None)
         fit_table(self.table)
 
     def _open(self, row: int, _col: int) -> None:
@@ -936,106 +955,3 @@ class HelpPage(Page):
     def update_view(self, view: dict) -> None:
         self.data_note.setText(t('Tu historial se guarda en {0}').format(view['data_dir']))
 
-
-class MatchDialog(QDialog):
-    def __init__(self, m: dict, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(f"{map_label(m['map'])} · {short_date(m['played_at'])}")
-        self.resize(1120, 800)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        area, body = scroll_page()
-        body.setContentsMargins(24, 20, 24, 24)
-        outer.addWidget(area)
-        s = m["s"]
-        text, color = result_text(m["result"], m["score_us"], m["score_them"])
-        head = panel()
-        row = QHBoxLayout(head)
-        row.setContentsMargins(20, 14, 20, 14)
-        left = QVBoxLayout()
-        left.addWidget(label(f"{SOURCE_NAMES.get(m['source'], m['source'])} · {short_date(m['played_at'])}", "muted"))
-        title = QHBoxLayout()
-        title.addWidget(label(map_label(m["map"]), "playerName"))
-        score = label(text, "playerName")
-        score.setStyleSheet(f"color: {color};")
-        title.addWidget(score)
-        title.addStretch(1)
-        left.addLayout(title)
-        row.addLayout(left, 1)
-        for title_text, value, value_color in ((t("RATING"), fmt_num(s["rating"], 2), rating_color(s["rating"])),
-                                               ("K / D / A", f"{s['kills']} / {s['deaths']} / {s['assists']}", TEXT),
-                                               (t("ADR"), fmt_num(s["adr"], 0), TEXT), (t("KAST"), fmt_pct(s["kast"]), TEXT),
-                                               (t("HS %"), fmt_pct(s["hs"]), TEXT)):
-            col = QVBoxLayout()
-            col.addWidget(label(title_text, "cardTitle"))
-            v = label(value, "bigValue")
-            v.setStyleSheet(f"color: {value_color};")
-            col.addWidget(v)
-            row.addLayout(col)
-            row.addSpacing(14)
-        if m.get("rank_type") == 11 and m.get("rank_new"):
-            change = m.get("rank_change") or 0
-            col = QVBoxLayout()
-            col.addWidget(label(t("PREMIER"), "cardTitle"))
-            badge = QLabel(f"{fmt_num(m['rank_new'], 0)}  ({change:+.0f})")
-            badge.setStyleSheet(f"color: {GOOD if change >= 0 else BAD}; font-size: 18px; font-weight: 800;")
-            col.addWidget(badge)
-            row.addLayout(col)
-        body.addWidget(head)
-
-        board, layout = card(t("Tabla de la partida"), t("Rating, ADR y KAST calculados de la demo para los 10 jugadores"))
-        widget = table([t("Jugador"), t("Premier"), "K", "D", "A", "+/-", t("ADR"), t("KAST"), t("HS %"), t("1er duelo"), t("Rating")])
-        for col in range(1, 11):
-            widget.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-        rows = m["scoreboard"]
-        widget.setRowCount(len(rows) + 1)
-        index = 0
-        for ally in (True, False):
-            if not ally:
-                for col in range(11):
-                    widget.setItem(index, col, cell(t("RIVALES") if col == 0 else "", SUBTLE, True))
-                index += 1
-            for p in [p for p in rows if p["ally"] == ally]:
-                st = p.get("stats") or {}
-                tint = ACCENT if p.get("me") else None
-                diff = p["kills"] - p["deaths"]
-                values = [cell(p["name"], tint, bool(p.get("me"))), cell(fmt_num(p.get("premier"), 0) if p.get("premier") else "—", CT_COLOR),
-                          cell(str(p["kills"]), center=True), cell(str(p["deaths"]), center=True), cell(str(p["assists"]), center=True),
-                          cell(f"{diff:+d}", GOOD if diff > 0 else BAD if diff < 0 else MUTED, center=True),
-                          cell(fmt_num(p["adr"], 0), center=True), cell(fmt_pct(st.get("kast")), center=True),
-                          cell(fmt_pct(p["hs"] / p["kills"] if p["kills"] else None), center=True),
-                          cell(f"{st.get('opening_kills', 0)}-{st.get('opening_deaths', 0)}", center=True),
-                          rating_cell(p.get("rating"))]
-                for col, item in enumerate(values):
-                    widget.setItem(index, col, item)
-                index += 1
-        widget.setRowCount(index)
-        fit_table(widget)
-        layout.addWidget(widget)
-        body.addWidget(board)
-
-        rounds_box, layout = card(t("Ronda por ronda"), t("Pasá el mouse por una ronda para ver el detalle"))
-        strip = RoundStrip()
-        strip.set_rounds(m["rounds"])
-        layout.addWidget(strip)
-        body.addWidget(rounds_box)
-
-        grid = QGridLayout()
-        grid.setSpacing(10)
-        stats = [(t("Primeros duelos"), f"{s['opening_kills']} ganados, {s['opening_deaths']} perdidos"),
-                 (t("Clutches"), f"{s['clutches_won']} de {s['clutches']}"),
-                 (t("Muertes vengadas"), f"{s['tradeable_deaths'] - s['untraded_deaths']} de {s['tradeable_deaths']}"),
-                 (t("Morís primero"), t('{0} de {1} rondas').format(s['first_team_deaths'], s['rounds'])),
-                 (t("Utilidad"), f"{s['flashes']} flashes, {s['smokes']} humos, {s['molotovs']} molotovs, {s['hes']} HE"),
-                 (t("Flashes efectivas"), t('{0} enemigos, {1} compañeros').format(s['enemies_flashed'], s['team_flashed'])),
-                 (t("Daño de granadas"), fmt_num(s["util_damage"], 0)),
-                 (t("Kills de cambio"), str(s["trade_kills"]))]
-        for index, (title_text, value) in enumerate(stats):
-            box = panel("cardFlat")
-            col = QVBoxLayout(box)
-            col.setContentsMargins(12, 8, 12, 8)
-            col.addWidget(label(title_text.upper(), "cardTitle"))
-            col.addWidget(label(value, "midValue", wrap=True))
-            grid.addWidget(box, index // 4, index % 4)
-        body.addLayout(grid)
-        body.addStretch(1)

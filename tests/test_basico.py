@@ -45,6 +45,24 @@ class ParserTest(unittest.TestCase):
         self.assertAlmostEqual(s["adr"], 78.1, delta=0.5)
         self.assertIn("m4a1_silencer", match["weapons"])
         self.assertGreater(match["weapons"]["m4a1_silencer"]["damage"], 0)
+        # Puntería: los 10 jugadores, y la tuya cerca de lo que marca Leetify para esta partida (20 % total, 30 % cabeza).
+        from cs2stats.metrics import aim_summary
+        self.assertEqual(len(match["aim"]), 10)
+        aim = aim_summary(match["aim"][str(DEMO_ME)])
+        self.assertAlmostEqual(aim["accuracy"], 0.20, delta=0.02)
+        self.assertAlmostEqual(aim["head_accuracy"], 0.30, delta=0.03)
+        self.assertLess(aim["crosshair"], 8)
+        self.assertTrue(250 < aim["time_to_damage"] < 800)
+        # Impacto, duelos y utilidad: tu impacto da positivo (Leetify marca +3,83) y las kills cuadran con la tabla.
+        from cs2stats.metrics import player_numbers
+        mine = player_numbers(match, DEMO_ME)
+        self.assertGreater(mine["impact"], 0)
+        self.assertEqual(len(match["detail"]["impact"][str(DEMO_ME)]["rounds"]), 22)  # en la 2 arrancaste muerto
+        self.assertEqual(sum(1 for k in match["detail"]["kills"] if k[1] == str(DEMO_ME)), 18)
+        self.assertTrue(20 <= mine["utility_rating"] <= 50)
+        spent, deaths = match["detail"]["unused"][str(DEMO_ME)]
+        self.assertEqual(deaths, 14)  # 15 muertes, pero una fue con la ronda ya terminada
+        self.assertAlmostEqual(spent / deaths, 253, delta=60)
 
     @unittest.skipUnless(DEMO_ME and MIRAGE.exists(), "No está la demo de Mirage")
     def test_mirage_faceit(self):
@@ -61,6 +79,53 @@ class ParserTest(unittest.TestCase):
         from cs2stats.parser import NotInDemo, parse_demo
         with self.assertRaises(NotInDemo):
             parse_demo(str(NUKE), 76561197960265728 + 807884606)
+
+
+class AimTest(unittest.TestCase):
+    def test_resumen(self):
+        from cs2stats.metrics import aim_summary
+        raw = {"shots": 200, "hits": 40, "seen_shots": 100, "seen_hits": 30, "first_shots": 50, "first_hits": 15,
+               "spray_shots": 50, "spray_hits": 15, "strafe_shots": 50, "strafe_ok": 40, "gun_hits": 40, "head_hits": 10,
+               "ttd_sum": 5000.0, "ttd_n": 10, "xhair_sum": 60.0, "xhair_n": 12}
+        aim = aim_summary(raw)
+        self.assertEqual((aim["accuracy"], aim["seen_accuracy"], aim["head_accuracy"]), (0.2, 0.3, 0.25))
+        self.assertEqual((aim["time_to_damage"], aim["crosshair"], aim["counter_strafe"]), (500.0, 5.0, 0.8))
+        self.assertIsNone(aim_summary({}))
+
+    def test_sin_disparos(self):
+        from cs2stats.metrics import aim_summary
+        raw = dict.fromkeys(("shots", "hits", "seen_shots", "seen_hits", "first_shots", "first_hits", "spray_shots",
+                             "spray_hits", "strafe_shots", "strafe_ok", "gun_hits", "head_hits", "ttd_sum", "ttd_n",
+                             "xhair_sum", "xhair_n"), 0)
+        self.assertIsNone(aim_summary(raw)["accuracy"])
+
+
+class DetailTest(unittest.TestCase):
+    def test_probabilidad(self):
+        from cs2stats.parser import win_chance_t
+        self.assertAlmostEqual(win_chance_t(5, 5, False), 0.5)
+        self.assertGreater(win_chance_t(5, 4, False), 0.5)
+        self.assertGreater(win_chance_t(2, 2, True), win_chance_t(2, 2, False))
+        self.assertEqual((win_chance_t(3, 0, False), win_chance_t(0, 3, False)), (1.0, 0.0))
+
+    def test_nota_de_utilidad(self):
+        from cs2stats.metrics import utility_rating
+        stats = {"rounds": 20, "util_thrown": 40, "flashes": 10, "hes": 5, "enemies_flashed": 10, "blind_time": 25.0,
+                 "he_damage": 100.0, "team_flashed": 0, "smokes": 15, "molotovs": 10}
+        good = utility_rating(stats)
+        bad = utility_rating({**stats, "enemies_flashed": 1, "blind_time": 1.0, "team_flashed": 8})
+        self.assertGreater(good["rating"], bad["rating"])
+        self.assertAlmostEqual(good["rating"] ** 2, good["quality"] * good["quantity"], delta=0.01)
+        self.assertEqual(utility_rating({"rounds": 20, "util_thrown": 0})["rating"], 0)
+
+    def test_impacto(self):
+        from cs2stats.metrics import impact_rating
+        entry = {"rounds": {"1": 0.2, "2": -0.1, "13": 0.3}, "sides": {"1": "CT", "2": "CT", "13": "T"}, "cats": {"opening": 0.2}}
+        impact = impact_rating(entry)
+        self.assertAlmostEqual(impact["total"], 40 / 3)
+        self.assertAlmostEqual(impact["CT"], 5)
+        self.assertAlmostEqual(impact["T"], 30)
+        self.assertIsNone(impact_rating(None)["total"])
 
 
 class InsightTest(unittest.TestCase):

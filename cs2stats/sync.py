@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 from . import steamapi
@@ -87,6 +88,7 @@ def sync_steam(store: Store, settings: Settings, log: Callable[[str], None]) -> 
             store.add_sharecodes([code])
             store.update_sharecode(code, status="con_url", demo_url=url)
             imported += _download_and_import(store, settings, code, url, 0, log, played_at=row["played_at"])
+    complete_details(store, settings, log)
     settings.set("steam_synced_at", datetime.now().isoformat(timespec="seconds"))
     settings.set("steam_error", "")
     if ready["gc"]:
@@ -173,6 +175,48 @@ def _download_and_import(store: Store, settings: Settings, code: str, url: str, 
     store.update_sharecode(code, status="importada", match_key=match["match_key"], message="")
     log(f"Importada: {map_label(match['map'])} {match['score_us']} a {match['score_them']}")
     return 1
+
+
+DETAIL_PER_SYNC = 8   # partidas viejas que se completan en cada búsqueda (cada una puede ser una descarga)
+
+
+def complete_details(store: Store, settings: Settings, log: Callable[[str], None], limit: int = DETAIL_PER_SYNC) -> int:
+    """Vuelve a leer las partidas importadas antes de que la app midiera puntería, impacto, duelos y utilidad,
+    de la más nueva a la más vieja.
+
+    Usa la demo si sigue en la PC; si no, la vuelve a bajar de Valve mientras exista. Si ya no está, queda marcada."""
+    done = 0
+    for match in reversed(store.matches(settings["steamid"])):
+        # Falta el detalle, o se completó antes de que la app guardara el MVP de cada ronda ({} = sin demo, no se reintenta).
+        if match["detail"] is not None and not (match["detail"] and match["rounds"] and "mvp" not in match["rounds"][0]):
+            continue
+        if done >= limit:
+            break
+        path, url = store.demo_sources(match["match_key"])
+        fresh = None
+        try:
+            if path and Path(path).exists() and path.lower().endswith(".dem"):
+                log(t("Completando el detalle de {0}").format(map_label(match["map"])))
+                fresh = parse_demo(path, settings["steamid"])
+            elif url:
+                log(t("Bajando otra vez la demo de {0} para completar el detalle").format(map_label(match["map"])))
+                try:
+                    demo = steamapi.download_demo(url, data_dir() / "descargas")
+                except steamapi.SteamError as error:
+                    if str(error) != t("Valve ya borró esa demo de sus servidores."):
+                        log(str(error))
+                        break  # se cortó la descarga: se reintenta en la próxima búsqueda
+                    demo = None
+                if demo:
+                    try:
+                        fresh = parse_demo(str(demo), settings["steamid"])
+                    finally:
+                        remove_quietly(demo)
+        except DemoError as error:
+            log(str(error))
+        store.refresh_match(match["id"], fresh if fresh and fresh["match_key"] == match["match_key"] else None)
+        done += 1
+    return done
 
 
 def sync_history(store: Store, settings: Settings, cookies: list[str], log: Callable[[str], None]) -> int:

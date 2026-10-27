@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from cs2stats.importer import import_demo, pending_demos  # noqa: E402
 from cs2stats.store import PARSER_VERSION, Settings, Store  # noqa: E402
-from cs2stats.ui.pages import MatchDialog  # noqa: E402
+from cs2stats.ui.match import MatchDialog  # noqa: E402
 from cs2stats.ui.theme import STYLE  # noqa: E402
 from cs2stats.ui.window import MainWindow  # noqa: E402
 
@@ -40,9 +40,9 @@ def shoot() -> None:
         app.processEvents()
         window.grab().save(str(out / f"{key}.png"))
     if window.view["matches"]:
-        dialog = MatchDialog(window.view["matches"][-1], window)
+        dialog = MatchDialog(window.view["matches"][-1], window, window.view["all_matches"])
         dialog.setStyleSheet(STYLE)
-        dialog.resize(1180, 940)
+        dialog.resize(1340, 1500)
         dialog.show()
         app.processEvents()
         dialog.grab().save(str(out / "partida.png"))

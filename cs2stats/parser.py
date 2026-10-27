@@ -27,14 +27,15 @@ NOT_A_GUN = {"knife", "knife_t", "world", "", "hegrenade", "inferno", "molotov",
              "flashbang", "smokegrenade", "decoy", "c4", "planted_c4"}
 EVENTS = ["begin_new_match", "cs_pre_restart", "round_freeze_end", "round_end", "buytime_ended", "player_death",
           "player_hurt", "player_blind", "weapon_fire", "rank_update", "smokegrenade_detonate", "flashbang_detonate",
-          "hegrenade_detonate", "inferno_startburn"]
+          "hegrenade_detonate", "inferno_startburn", "bomb_planted", "bomb_defused"]
 # Latas: tiro (weapon_fire) y dónde explotó (evento de detonación del mismo jugador y tipo).
 NADE_THROWS = {"weapon_smokegrenade": "smoke", "weapon_flashbang": "flash", "weapon_hegrenade": "he",
                "weapon_molotov": "molotov", "weapon_incgrenade": "molotov"}
 NADE_LANDINGS = {"smokegrenade_detonate": "smoke", "flashbang_detonate": "flash", "hegrenade_detonate": "he",
                  "inferno_startburn": "molotov"}
 GRID = 48   # tamaño de celda (unidades del juego) del mapa armado con las posiciones de los jugadores
-TICK_PROPS = ["team_num", "is_alive", "balance", "cash_spent_this_round", "current_equip_value"]
+TICK_PROPS = ["team_num", "is_alive", "balance", "cash_spent_this_round", "current_equip_value", "mvps"]
+MVP_DELAY = 8  # el MVP de la ronda se anota apenas después del fin de ronda
 RANK_SOURCES = {11: "premier", 12: "competitivo", 7: "wingman"}
 
 
@@ -122,7 +123,7 @@ def parse_demo(path: str, steamid: int) -> dict:
     for index, window in enumerate(windows):
         window["until"] = windows[index + 1]["open"] if index + 1 < len(windows) else float("inf")
 
-    snapshot_ticks = sorted({w["start"] for w in windows} | {w["buy"] for w in windows})
+    snapshot_ticks = sorted({w["start"] for w in windows} | {w["buy"] for w in windows} | {w["end"] + MVP_DELAY for w in windows})
     try:
         ticks = parser.parse_ticks(TICK_PROPS, ticks=snapshot_ticks)
     except (KeyboardInterrupt, SystemExit):
@@ -159,6 +160,17 @@ def parse_demo(path: str, steamid: int) -> dict:
         last_team.update(team)
         round_teams.append(team)
     half_rounds = 12
+    # Quiénes arrancaron vivos cada ronda (para la probabilidad de ganar, jugador por jugador).
+    # Si la demo trae vacío el estado de un jugador conectado (pasa), se lo toma como vivo.
+    round_alive = [{p for p, row in states.get(w["start"], {}).items()
+                    if (row.get("is_alive") is None or bool(row.get("is_alive"))) and round_teams[i].get(p) in (2, 3)}
+                   for i, w in enumerate(windows)]
+    for row in events.get("player_death", []) + events.get("player_hurt", []):
+        # A veces la demo no trae el estado de un jugador justo en ese tick: si murió o pegó en la ronda, estaba vivo.
+        index = next((i for i, w in enumerate(windows) if w["start"] <= row["tick"] <= w["end"]), None)
+        for player in (sid(row.get("user_steamid")), sid(row.get("attacker_steamid"))):
+            if index is not None and player and round_teams[index].get(player) in (2, 3):
+                round_alive[index].add(player)
 
     def player_rounds(target: int) -> tuple[list[dict], dict[str, dict]]:
         """Rondas y armas de un jugador. Se usa para vos (completo) y para los otros 9 (promedios del rango)."""
@@ -216,6 +228,9 @@ def parse_demo(path: str, steamid: int) -> dict:
                 "buy": _buy_type(equip, pistol), "team_buy": _buy_type(team_equip, pistol),
                 "flash": 0, "smoke": 0, "he": 0, "molotov": 0, "decoy": 0,
                 "enemies_flashed": 0, "blind_time": 0.0, "team_flashed": 0, "kill_weapons": [],
+                "he_damage": 0.0, "he_team_damage": 0.0,
+                "mvp": float((states.get(window["end"] + MVP_DELAY, {}).get(target) or {}).get("mvps") or 0)
+                > float(me_start.get("mvps") or 0),
             }
 
             # Muertes: K/D/A, primer duelo, cambios y clutch.
@@ -282,6 +297,8 @@ def parse_demo(path: str, steamid: int) -> dict:
                 before = health.get(victim, 100.0)
                 dealt = max(0.0, min(float(row.get("dmg_health") or 0), before))
                 health[victim] = float(row.get("health") or 0)
+                if attacker == target and victim != target and team.get(attacker) == team.get(victim)                         and weapon_name(row.get("weapon")) == "hegrenade":
+                    info["he_team_damage"] += dealt
                 if attacker != target or attacker == victim or team.get(attacker) == team.get(victim):
                     continue
                 gun = weapon_name(row.get("weapon"))
@@ -290,6 +307,8 @@ def parse_demo(path: str, steamid: int) -> dict:
                 info["damage"] += dealt
                 if gun in UTILITY_DAMAGE:
                     info["util_damage"] += dealt
+                if gun == "hegrenade":
+                    info["he_damage"] += dealt
                 weapon_row(gun)["damage"] += dealt
                 if gun not in NOT_A_GUN:
                     weapon_row(gun)["hits"] += 1
@@ -318,6 +337,8 @@ def parse_demo(path: str, steamid: int) -> dict:
 
             info["damage"] = round(info["damage"], 1)
             info["util_damage"] = round(info["util_damage"], 1)
+            info["he_damage"] = round(info["he_damage"], 1)
+            info["he_team_damage"] = round(info["he_team_damage"], 1)
             info["blind_time"] = round(info["blind_time"], 2)
             info["kast"] = bool(info["kills"] or info["assists"] or not info["died_live"] or info["traded"])
             rounds.append(info)
@@ -381,7 +402,280 @@ def parse_demo(path: str, steamid: int) -> dict:
         "rank": rank, "rounds": rounds, "weapons": weapons, "scoreboard": scoreboard,
         "grenades": _grenades(parser, events, windows, round_teams, names, steamid),
         "grid": _position_grid(parser, windows),
+        "aim": _aim(parser, events, windows),
+        "detail": _detail(parser, events, windows, round_teams, round_alive),
     }
+
+
+SPRAY_GAP = 20          # ticks (0,3 s): un disparo tan seguido del anterior ya es parte de una ráfaga
+STOPPED_SPEED = 100     # unidades por segundo: por debajo, el arma ya dispara precisa (counter-strafe bien hecho)
+SIGHT_GAP = TICKRATE    # para contar como "apareció", el rival tuvo que estar sin verse al menos 1 s
+SIGHT_LEAD = 6          # el aviso de "visto" llega unos ticks tarde: la mira se mide un poco antes
+DAMAGE_WINDOW = 3 * TICKRATE
+
+
+def _aim(parser, events, windows) -> dict:
+    """Puntería de cada jugador, al estilo de Leetify: cuentas crudas que metrics.aim_summary vuelve porcentajes.
+
+    "Visto" usa lo que el propio juego marca como enemigo a la vista (approximate_spotted_by)."""
+    import numpy as np
+
+    if not windows:
+        return {}
+    live = [t for w in windows for t in range(w["start"], w["end"] + 1)]
+    try:
+        frame = parser.parse_ticks(["X", "Y", "Z", "pitch", "yaw", "is_alive", "team_num", "ducking",
+                                    "approximate_spotted_by"], ticks=live)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return {}
+    if frame is None or not len(frame):
+        return {}
+    frame = frame[frame["steamid"].notna()]
+    first, last = live[0], live[-1]
+    size = last - first + 1
+    players = sorted({sid(s) for s in frame["steamid"]} - {0})
+    index = {player: i for i, player in enumerate(players)}
+    count = len(players)
+    rows = frame["steamid"].map(sid).map(index).to_numpy()
+    cols = frame["tick"].to_numpy(dtype=np.int64) - first
+
+    def grid(column: str, kind=float, empty=np.nan):
+        out = np.full((count, size), empty, dtype=kind)
+        out[rows, cols] = frame[column].fillna(empty).to_numpy(dtype=kind)
+        return out
+
+    x, y, z, pitch, yaw = (grid(c) for c in ("X", "Y", "Z", "pitch", "yaw"))
+    alive = grid("is_alive", bool, False)
+    team = grid("team_num", np.int8, 0)
+    eye = z + np.where(grid("ducking", bool, False), 46.0, 64.0)
+    speed = np.zeros((count, size))
+    speed[:, 1:] = np.hypot(np.diff(x, axis=1), np.diff(y, axis=1)) * TICKRATE
+    # seen[a, b, t]: el jugador a tiene a la vista al rival b.
+    seen = np.zeros((count, count, size), dtype=bool)
+    for victim, tick, spotters in zip(rows, cols, frame["approximate_spotted_by"]):
+        for spotter in spotters if isinstance(spotters, (list, tuple)) else ():
+            a = index.get(sid(spotter))
+            if a is not None and a != victim:
+                seen[a, victim, tick] = True
+    enemy = (team[:, None, :] != team[None, :, :]) & (team[None, :, :] > 0) & alive[None, :, :] & alive[:, None, :]
+    seen &= enemy
+    any_seen = seen.any(axis=1)
+
+    def is_gun(raw) -> bool:
+        gun = weapon_name(raw)
+        return bool(gun) and str(raw or "") not in GRENADE_THROWS and not gun.startswith("knife") \
+            and gun not in NOT_A_GUN and gun != "taser"
+
+    def at(tick: int) -> int | None:
+        return tick - first if first <= tick <= last else None
+
+    shots: dict[int, list[tuple[int, str]]] = {}
+    for row in events.get("weapon_fire", []):
+        player, tick = sid(row.get("user_steamid")), at(row["tick"])
+        if player in index and tick is not None and is_gun(row.get("weapon")):
+            shots.setdefault(player, []).append((tick, weapon_name(row.get("weapon"))))
+    hits: dict[int, list[tuple[int, int, bool]]] = {}  # (tick, víctima, a la cabeza)
+    for row in events.get("player_hurt", []):
+        attacker, victim, tick = sid(row.get("attacker_steamid")), sid(row.get("user_steamid")), at(row["tick"])
+        if attacker in index and victim in index and tick is not None and is_gun(row.get("weapon")) \
+                and team[index[attacker], tick] != team[index[victim], tick]:
+            hits.setdefault(attacker, []).append((tick, index[victim], str(row.get("hitgroup") or "") == "head"))
+
+    result = {}
+    for player in players:
+        a = index[player]
+        mine = shots.get(player, [])
+        landed = hits.get(player, [])
+        hit_ticks = sorted(t for t, _v, _h in landed)
+        raw = {"shots": len(mine), "hits": 0, "seen_shots": 0, "seen_hits": 0, "first_shots": 0, "first_hits": 0,
+               "spray_shots": 0, "spray_hits": 0, "strafe_shots": 0, "strafe_ok": 0, "gun_hits": len(landed),
+               "head_hits": sum(1 for *_x, head in landed if head), "ttd_sum": 0.0, "ttd_n": 0,
+               "xhair_sum": 0.0, "xhair_n": 0}
+        previous = (-SPRAY_GAP - 1, "")
+        for tick, gun in mine:
+            j = bisect.bisect_left(hit_ticks, tick)
+            hit = j < len(hit_ticks) and hit_ticks[j] - tick <= 1
+            raw["hits"] += hit
+            spray = tick - previous[0] <= SPRAY_GAP and gun == previous[1]
+            previous = (tick, gun)
+            if not any_seen[a, tick]:
+                continue
+            raw["seen_shots"] += 1
+            raw["seen_hits"] += hit
+            kind = "spray" if spray else "first"
+            raw[f"{kind}_shots"] += 1
+            raw[f"{kind}_hits"] += hit
+            if not spray:
+                raw["strafe_shots"] += 1
+                raw["strafe_ok"] += bool(speed[a, tick] < STOPPED_SPEED)
+        # Cada vez que un rival aparece: dónde estaba la mira y cuánto tardaste en pegarle.
+        for b in range(count):
+            visible = seen[a, b]
+            if b == a or not visible.any():
+                continue
+            damage = sorted(t for t, v, _h in landed if v == b)
+            for tick in np.flatnonzero(visible[1:] & ~visible[:-1]) + 1:
+                if visible[max(0, tick - SIGHT_GAP):tick].any():
+                    continue
+                j = bisect.bisect_left(damage, tick)
+                if j < len(damage) and damage[j] - tick <= DAMAGE_WINDOW:
+                    raw["ttd_sum"] += (damage[j] - tick) / TICKRATE * 1000
+                    raw["ttd_n"] += 1
+                u = max(0, tick - SIGHT_LEAD)
+                dx, dy, dz = x[b, u] - x[a, u], y[b, u] - y[a, u], eye[b, u] - eye[a, u]
+                want_yaw = math.degrees(math.atan2(dy, dx))
+                want_pitch = -math.degrees(math.atan2(dz, math.hypot(dx, dy)))
+                angle = math.hypot((yaw[a, u] - want_yaw + 180) % 360 - 180, pitch[a, u] - want_pitch)
+                if math.isfinite(angle):
+                    raw["xhair_sum"] += angle
+                    raw["xhair_n"] += 1
+        raw["ttd_sum"] = round(raw["ttd_sum"], 1)
+        raw["xhair_sum"] = round(raw["xhair_sum"], 2)
+        result[str(player)] = {k: (int(v) if isinstance(v, (bool, np.bool_, np.integer)) else v) for k, v in raw.items()}
+    return result
+
+
+UTILITY_PRICES = {"Flashbang": 200, "Smoke Grenade": 300, "High Explosive Grenade": 300, "Molotov": 400,
+                  "Incendiary Grenade": 500, "Decoy Grenade": 50}
+PLANT_ODDS = 2.2   # con la bomba plantada, a los T les alcanza con aguantar: sus chances se multiplican
+
+
+def win_chance_t(t_alive: int, ct_alive: int, planted: bool) -> float:
+    """Probabilidad de que ganen los T según cuántos quedan vivos de cada lado (y si la bomba está plantada)."""
+    if ct_alive <= 0:
+        return 1.0
+    if t_alive <= 0:
+        return 0.15 if planted else 0.0
+    odds = (t_alive / ct_alive) ** 2.5 * (PLANT_ODDS if planted else 1.0)
+    return odds / (1 + odds)
+
+
+def _detail(parser, events, windows, round_teams, round_alive) -> dict:
+    """Lo que necesitan las pestañas del detalle, para los 10 jugadores:
+
+    * impact: cuánto movió cada jugador la probabilidad de ganar de su equipo en cada ronda (como el rating de Leetify),
+      separado por tipo de jugada.
+    * kills y damage: quién mató a quién, con qué, y el daño entre cada par de jugadores (cara a cara).
+    * unused: plata en granadas que cada uno tenía encima al morir."""
+    impact: dict[str, dict] = {}
+    kills: list[list] = []
+    damage: dict[str, float] = {}
+    deaths_at: list[tuple[int, int]] = []
+
+    def entry(player: int) -> dict:
+        return impact.setdefault(str(player), {"rounds": {}, "sides": {}, "cats": {}})
+
+    def credit(player: int, number: int, category: str, value: float) -> None:
+        if not player or not value:
+            return
+        item = entry(player)
+        item["rounds"][str(number)] = item["rounds"].get(str(number), 0.0) + value
+        item["cats"][category] = item["cats"].get(category, 0.0) + value
+
+    timeline = [(row["tick"], 0, "hurt", row) for row in events.get("player_hurt", [])]
+    timeline += [(row["tick"], 1, "death", row) for row in events.get("player_death", [])]
+    timeline += [(row["tick"], 2, "plant", row) for row in events.get("bomb_planted", [])]
+    timeline += [(row["tick"], 2, "defuse", row) for row in events.get("bomb_defused", [])]
+    timeline.sort(key=lambda item: (item[0], item[1]))
+    ticks = [item[0] for item in timeline]
+
+    for index, window in enumerate(windows):
+        number = index + 1
+        team = round_teams[index]
+        for player in round_alive[index]:
+            item = entry(player)
+            item["rounds"].setdefault(str(number), 0.0)
+            item["sides"][str(number)] = "T" if team.get(player) == 2 else "CT"
+        alive = set(round_alive[index])
+        planted, first = False, True
+        health: dict[int, float] = {}
+        hurt_by: dict[int, dict[int, float]] = {}
+        recent: list[tuple[int, int, int]] = []  # (tick, asesino, víctima) para los cambios
+
+        def chance() -> float:
+            return win_chance_t(sum(1 for p in alive if team.get(p) == 2), sum(1 for p in alive if team.get(p) == 3), planted)
+
+        def kind(player: int, opening: bool, solo: bool) -> str:
+            if opening:
+                return "opening"
+            if planted:
+                return "afterplant" if team.get(player) == 2 else "retake"
+            return "clutch" if solo else "midround"
+
+        start = bisect.bisect_left(ticks, window["start"])
+        end = bisect.bisect_right(ticks, window["end"])
+        for tick, _order, what, row in timeline[start:end]:
+            if what == "hurt":
+                victim, attacker = sid(row.get("user_steamid")), sid(row.get("attacker_steamid"))
+                before = health.get(victim, 100.0)
+                dealt = max(0.0, min(float(row.get("dmg_health") or 0), before))
+                health[victim] = float(row.get("health") or 0)
+                if attacker and attacker != victim and team.get(attacker) not in (None, team.get(victim)):
+                    hurt_by.setdefault(victim, {})[attacker] = hurt_by.get(victim, {}).get(attacker, 0.0) + dealt
+                    key = f"{attacker}>{victim}"
+                    damage[key] = round(damage.get(key, 0.0) + dealt, 1)
+                continue
+            if what == "plant":
+                before = chance()
+                planted = True
+                credit(sid(row.get("user_steamid")), number, "afterplant", chance() - before)
+                continue
+            if what == "defuse":
+                credit(sid(row.get("user_steamid")), number, "retake", chance())
+                continue
+            victim, killer = sid(row.get("user_steamid")), sid(row.get("attacker_steamid"))
+            if victim not in alive:
+                continue
+            side = team.get(victim)
+            victim_solo = sum(1 for p in alive if team.get(p) == side) == 1
+            killer_solo = sum(1 for p in alive if team.get(p) == team.get(killer)) == 1
+            before = chance()
+            alive.discard(victim)
+            after = chance()
+            lost = (before - after) if side == 2 else (after - before)  # lo que perdió el equipo de la víctima
+            deaths_at.append((tick, victim))
+            credit(victim, number, kind(victim, first, victim_solo), -lost)
+            if killer and killer != victim and team.get(killer) not in (None, side):
+                kills.append([number, str(killer), str(victim), weapon_name(row.get("weapon")), bool(row.get("headshot"))])
+                shares = {p: d for p, d in hurt_by.get(victim, {}).items() if d > 0}
+                total = sum(shares.values())
+                if killer not in shares or not total:
+                    shares, total = {killer: 1.0}, 1.0
+                # Si con esta kill vengó a un compañero, la mitad del crédito es para el que murió primero.
+                traded = [v for t, k, v in recent if k == victim and team.get(v) == team.get(killer) and tick - t <= TRADE_WINDOW]
+                for player, dealt in shares.items():
+                    part = lost * dealt / total
+                    if player != killer:
+                        credit(player, number, "damage_assist", part)
+                    elif traded:
+                        credit(player, number, kind(player, first, killer_solo), part / 2)
+                        credit(traded[-1], number, "traded", part / 2)
+                    else:
+                        credit(player, number, kind(player, first, killer_solo), part)
+                recent.append((tick, killer, victim))
+            first = False
+
+    # Granadas que cada uno tenía encima al morir.
+    unused: dict[str, list] = {}
+    if deaths_at:
+        try:
+            frame = parser.parse_ticks(["inventory"], ticks=sorted({max(0, t - 1) for t, _v in deaths_at}))
+            inventory = {(int(r["tick"]), sid(r.get("steamid"))): r.get("inventory") for r in frame.to_dict("records")}
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            inventory = {}
+        for tick, victim in deaths_at:
+            items = inventory.get((max(0, tick - 1), victim))
+            total = unused.setdefault(str(victim), [0, 0])
+            total[0] += sum(UTILITY_PRICES.get(str(name), 0) for name in items) if isinstance(items, (list, tuple)) else 0
+            total[1] += 1
+    for item in impact.values():
+        item["rounds"] = {n: round(v, 4) for n, v in item["rounds"].items()}
+        item["cats"] = {c: round(v, 4) for c, v in item["cats"].items()}
+    return {"impact": impact, "kills": kills, "damage": damage, "unused": unused}
 
 
 def _grenades(parser, events, windows, round_teams, names, steamid) -> list[dict]:

@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+import math
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from ..i18n import t
-from .theme import ACCENT, BAD, CT_COLOR, GOOD, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num, rating_color, score_color
+from .theme import ACCENT, BAD, CT_COLOR, GOOD, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num, icon, rating_color, score_color
+
+
+def star_path(center: QPointF, radius: float) -> QPainterPath:
+    """Estrella de cinco puntas."""
+    path = QPainterPath()
+    for index in range(10):
+        r = radius if index % 2 == 0 else radius * 0.45
+        angle = math.radians(-90 + index * 36)
+        point = QPointF(center.x() + r * math.cos(angle), center.y() + r * math.sin(angle))
+        path.moveTo(point) if index == 0 else path.lineTo(point)
+    path.closeSubpath()
+    return path
 
 
 def smooth_path(points: list[QPointF]) -> QPainterPath:
@@ -351,7 +365,12 @@ class SideCompare(QWidget):
 
 
 class RoundStrip(QWidget):
-    """Una ficha por ronda: verde si la ganó tu equipo, roja si no; puntos = tus kills; raya = lado."""
+    """Una ficha por ronda: verde si la ganó tu equipo, roja si no; puntos = tus kills; raya = lado.
+
+    Si no entran todas en una fila, cada mitad (y cada alargue) va en su propia fila."""
+
+    CELL, GAP, ROW = 28.0, 5.0, 66.0
+    BREAKS = (13, 25, 31, 37, 43)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -362,50 +381,114 @@ class RoundStrip(QWidget):
 
     def set_rounds(self, rounds: list[dict]) -> None:
         self.rounds = rounds
+        self.updateGeometry()
         self.update()
+
+    def _rows(self, width: float) -> list[list[dict]]:
+        n = len(self.rounds)
+        if n * (self.CELL + self.GAP) + 14 * sum(1 for r in self.rounds if r["n"] in self.BREAKS) <= width:
+            return [self.rounds]
+        rows: list[list[dict]] = []
+        for r in self.rounds:
+            if not rows or r["n"] in self.BREAKS:
+                rows.append([])
+            rows[-1].append(r)
+        return rows
+
+    def hasHeightForWidth(self):  # noqa: N802
+        return True
+
+    def heightForWidth(self, width):  # noqa: N802
+        return int(22 + self.ROW * max(1, len(self._rows(width))))
+
+    def resizeEvent(self, event):  # noqa: N802
+        self.setMinimumHeight(self.heightForWidth(self.width()))
+        super().resizeEvent(event)
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         self._cells = []
-        n = len(self.rounds)
-        if not n:
+        if not self.rounds:
             return
-        gaps = sum(1 for r in self.rounds if r["n"] in (13, 25, 31))
-        cell = min(28.0, (self.width() - 5 * n - 14 * gaps) / n)
+        rows = self._rows(self.width())
+        single = len(rows) == 1
+        longest = max(len(row) for row in rows)
+        breaks = sum(1 for r in self.rounds if r["n"] in self.BREAKS)
+        cell = (min(self.CELL, (self.width() - self.GAP * len(self.rounds) - 14 * breaks) / len(self.rounds)) if single
+                else min(self.CELL, (self.width() - self.GAP * longest - 24) / longest))
+        skull = icon("skull", BAD, 12).pixmap(QSize(12, 12))
+        painter.setFont(QFont("Segoe UI", 8))
+        for line, row in enumerate(rows):
+            x, top = 0.0, 22 + line * self.ROW
+            for r in row:
+                if single and r["n"] in self.BREAKS:
+                    x += 14
+                rect = QRectF(x, top, cell, 44)
+                side = QColor(CT_COLOR if r["side"] == "CT" else T_COLOR)
+                fill = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+                base = QColor(GOOD if r["won"] else BAD)
+                base.setAlpha(70)
+                fill.setColorAt(0, base)
+                base.setAlpha(25)
+                fill.setColorAt(1, base)
+                edge = QColor(side)
+                edge.setAlpha(110 if r.get("mvp") else 55)
+                painter.setPen(QPen(QColor("#f2c14e") if r.get("mvp") else edge, 1.2 if r.get("mvp") else 1))
+                painter.setBrush(fill)
+                painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(side)
+                painter.drawRoundedRect(QRectF(rect.left() + 4, rect.top() + 4, rect.width() - 8, 3), 1.5, 1.5)
+                cx = rect.center().x()
+                if r["kills"] >= 2:
+                    # Ronda de varias kills: estrella dorada con la cantidad.
+                    painter.setBrush(QColor("#f2c14e"))
+                    painter.drawPath(star_path(QPointF(cx, rect.top() + 16), 6.5))
+                    painter.setPen(QColor("#f2c14e"))
+                    painter.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
+                    painter.drawText(QRectF(rect.left(), rect.top() + 22, rect.width(), 10), Qt.AlignmentFlag.AlignHCenter, f"{r['kills']}K")
+                    painter.setFont(QFont("Segoe UI", 8))
+                elif r["kills"] == 1:
+                    painter.setBrush(QColor(TEXT))
+                    painter.drawEllipse(QPointF(cx, rect.top() + 14), 2.2, 2.2)
+                if r["died"]:
+                    painter.drawPixmap(QPointF(cx - 6, rect.bottom() - 15), skull)
+                elif r.get("mvp"):
+                    painter.setPen(QColor("#f2c14e"))
+                    painter.setFont(QFont("Segoe UI", 6, QFont.Weight.Black))
+                    painter.drawText(QRectF(rect.left() - 2, rect.bottom() - 13, rect.width() + 4, 10), Qt.AlignmentFlag.AlignHCenter, "MVP")
+                    painter.setFont(QFont("Segoe UI", 8))
+                painter.setPen(QColor(SUBTLE))
+                painter.drawText(QRectF(rect.left() - 4, rect.bottom() + 4, rect.width() + 8, 14), Qt.AlignmentFlag.AlignHCenter, str(r["n"]))
+                buy = {"pistola": "pistola", "ahorro": "ahorro", "forzada": "forzada", "completa": t("compra completa")}.get(r["buy"], r["buy"])
+                tip = (t('Ronda {0} · {1} · {2}\n{3} kills · {4:.0f} de daño · {5}\nEquipo: ${6:.0f} ({7})').format(r['n'], r['side'], t('ganada') if r['won'] else t('perdida'), r['kills'], r['damage'], t('moriste') if r['died'] else t('sobreviviste'), r['equip'], buy))
+                if r.get("opening") == "kill":
+                    tip += t("\nGanaste el primer duelo")
+                elif r.get("opening") == "death":
+                    tip += t("\nPerdiste el primer duelo")
+                if r.get("clutch_vs"):
+                    tip += t("\nClutch 1 contra {0}: {1}").format(r['clutch_vs'], t("ganado") if r['clutch_won'] else t("perdido"))
+                if r.get("mvp"):
+                    tip += t("\nMVP de la ronda")
+                self._cells.append((rect, tip))
+                x += cell + self.GAP
+            if not single and line == 0 and len(rows) > 1:
+                # Flecha hacia la segunda mitad.
+                y = top + 22
+                painter.setPen(QPen(QColor(SUBTLE), 1.4))
+                painter.drawLine(QPointF(x + 2, y), QPointF(x + 16, y))
+                painter.drawLine(QPointF(x + 11, y - 4), QPointF(x + 16, y))
+                painter.drawLine(QPointF(x + 11, y + 4), QPointF(x + 16, y))
+        # Leyenda con el color de cada marca.
         x = 0.0
         painter.setFont(QFont("Segoe UI", 8))
-        for r in self.rounds:
-            if r["n"] in (13, 25, 31):
-                x += 14
-            rect = QRectF(x, 16, cell, 44)
-            base = QColor(GOOD if r["won"] else BAD); base.setAlpha(45)
-            painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(base)
-            painter.drawRoundedRect(rect, 5, 5)
-            painter.setBrush(QColor(CT_COLOR if r["side"] == "CT" else T_COLOR))
-            painter.drawRoundedRect(QRectF(rect.left() + 4, rect.top() + 4, rect.width() - 8, 3), 1.5, 1.5)
-            painter.setBrush(QColor(TEXT))
-            for k in range(min(r["kills"], 5)):
-                painter.drawEllipse(QPointF(rect.center().x(), rect.top() + 13 + k * 6), 2.2, 2.2)
-            if r["died"]:
-                painter.setPen(QPen(QColor(BAD), 1.4))
-                cx, cy = rect.center().x(), rect.bottom() - 7
-                painter.drawLine(QPointF(cx - 3, cy - 3), QPointF(cx + 3, cy + 3))
-                painter.drawLine(QPointF(cx - 3, cy + 3), QPointF(cx + 3, cy - 3))
-            painter.setPen(QColor(SUBTLE))
-            painter.drawText(QRectF(rect.left() - 4, rect.bottom() + 4, rect.width() + 8, 14), Qt.AlignmentFlag.AlignHCenter, str(r["n"]))
-            buy = {"pistola": "pistola", "ahorro": "ahorro", "forzada": "forzada", "completa": t("compra completa")}.get(r["buy"], r["buy"])
-            tip = (t('Ronda {0} · {1} · {2}\n{3} kills · {4:.0f} de daño · {5}\nEquipo: ${6:.0f} ({7})').format(r['n'], r['side'], t('ganada') if r['won'] else t('perdida'), r['kills'], r['damage'], t('moriste') if r['died'] else t('sobreviviste'), r['equip'], buy))
-            if r.get("opening") == "kill":
-                tip += t("\nGanaste el primer duelo")
-            elif r.get("opening") == "death":
-                tip += t("\nPerdiste el primer duelo")
-            if r.get("clutch_vs"):
-                tip += t("\nClutch 1 contra {0}: {1}").format(r['clutch_vs'], t("ganado") if r['clutch_won'] else t("perdido"))
-            self._cells.append((rect, tip))
-            x += cell + 5
-        painter.setPen(QColor(SUBTLE))
-        painter.drawText(QRectF(0, 0, 400, 14), Qt.AlignmentFlag.AlignLeft, t("Raya azul: CT · Raya naranja: T · Puntos: tus kills · Cruz: moriste"))
+        metrics = painter.fontMetrics()
+        for text, color in ((t("Raya azul: CT"), CT_COLOR), (" · ", SUBTLE), (t("Raya naranja: T"), T_COLOR), (" · ", SUBTLE),
+                            (t("★ varias kills"), "#f2c14e"), (" · ", SUBTLE), (t("Calavera: moriste"), BAD)):
+            painter.setPen(QColor(color))
+            painter.drawText(QRectF(x, 0, 400, 16), Qt.AlignmentFlag.AlignLeft, text)
+            x += metrics.horizontalAdvance(text)
 
     def mouseMoveEvent(self, event):  # noqa: N802
         pos = event.position()
