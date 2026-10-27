@@ -20,3 +20,6 @@ helper/node_modules/
 
 # Capturas de trabajo (tools/capturas.py)
 capturas/
+
+# Descarga armada para GitHub Releases
+release/
