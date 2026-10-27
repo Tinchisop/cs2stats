@@ -1,0 +1,844 @@
+"""Ventana principal: menú lateral, filtros y el controlador que une historial, Steam, demos locales y aviso de CS2."""
+
+from __future__ import annotations
+
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QMainWindow,
+                               QMenu, QMessageBox, QPushButton, QStackedWidget, QSystemTrayIcon, QVBoxLayout, QWidget)
+
+from .. import gsi
+from ..benchmarks import compare, highlights, lobby_samples, tier_of
+from ..finder import account_name, cs2_game_dir, steam_accounts, watched_folders
+from ..helper import HelperError
+from ..importer import import_demo, pending_demos
+from ..insights import analyze
+from ..metrics import SOURCE_NAMES, map_label, summarize
+from ..steamapi import SteamError
+from ..store import PARSER_VERSION, Settings, Store, data_dir
+from ..i18n import LANGUAGES, language, t
+from ..resumen import match_message
+from ..sync import reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
+from ..assets import avatar_path, download_avatar, extract_game_assets
+from ..nades import build_lineups
+from ..recorder import RecorderError, cs2_running, ffmpeg_path, launch_practice, record_lineups
+from .connect import ConnectPage, DemosPage, LoginDialog
+from .nades_page import NadesPage
+from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchDialog, MatchesPage, ProfilePage, RankPage,
+                    UtilityPage, WeaponsPage)
+from .theme import BAD, GOOD, MUTED, STYLE, app_icon, fmt_num, icon, label
+
+RUN_KEY = t(r"Software\Microsoft\Windows\CurrentVersion\Run")
+RUN_NAME = t("CS2 Stats")
+log = logging.getLogger("cs2stats")
+# Aviso al cambiar de idioma, en el idioma nuevo (la app sigue en el anterior hasta reabrirla).
+EN_RESTART = "The language changes the next time you open the app."
+ES_RESTART = "El idioma cambia la próxima vez que abras la app."
+
+
+def launch_command() -> str:
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" --bandeja'
+    return f'"{Path(sys.executable).with_name("pythonw.exe")}" -m cs2stats --bandeja'
+
+
+def startup_enabled() -> bool:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            winreg.QueryValueEx(key, RUN_NAME)
+            return True
+    except OSError:
+        return False
+
+
+def set_startup(enabled: bool) -> None:
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        if enabled:
+            winreg.SetValueEx(key, RUN_NAME, 0, winreg.REG_SZ, launch_command())
+        else:
+            try:
+                winreg.DeleteValue(key, RUN_NAME)
+            except OSError:
+                pass
+
+
+class ImportWorker(QObject):
+    progress = Signal(int, int, str)
+    item_done = Signal(str, str)
+    finished = Signal(int)
+
+    def __init__(self, store: Store, demos: list, steamid: int):
+        super().__init__()
+        self.store, self.demos, self.steamid = store, demos, steamid
+
+    def run(self) -> None:
+        imported = 0
+        total = len(self.demos)
+        for index, demo in enumerate(self.demos):
+            self.progress.emit(index, total, t('Leyendo {0} ({1} de {2})').format(demo.path.name, index + 1, total))
+            try:
+                result = import_demo(self.store, demo, self.steamid)
+            except BaseException as error:  # que una demo rara no frene las demás (incluye PanicException)
+                if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                    raise
+                log.exception("Falló la importación de %s", demo.path)
+                self.item_done.emit("error", f"{demo.path.name}: {error}")
+                continue
+            log.info("%s: %s (%s)", demo.path.name, result.status, result.message)
+            if result.status == "importada":
+                imported += 1
+            self.item_done.emit(result.status, result.message)
+        self.progress.emit(total, total, t("Listo"))
+        self.finished.emit(imported)
+
+
+class TaskWorker(QObject):
+    """Corre una tarea larga (sincronizar con Steam, leer el historial) fuera de la ventana."""
+    message = Signal(str)
+    finished = Signal(object, str)
+
+    def __init__(self, task):
+        super().__init__()
+        self.task = task
+
+    def run(self) -> None:
+        try:
+            result = self.task(self.message.emit)
+            self.finished.emit(result, "")
+        except (SteamError, HelperError, RecorderError) as error:
+            log.warning("Tarea: %s", error)
+            self.finished.emit(None, str(error))
+        except BaseException as error:
+            if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                raise
+            log.exception("Error en tarea de fondo")
+            self.finished.emit(None, t('Error inesperado: {0}').format(error))
+
+
+class TaskRunner(QObject):
+    """Un carril para tareas largas. Vive en el hilo de la ventana, así "done" siempre llega a la interfaz
+    (si se avisara desde el hilo de fondo, las pantallas redibujadas quedan en blanco)."""
+    done = Signal(object, str)
+    message = Signal(str)
+
+    def __init__(self, name: str, parent=None):
+        super().__init__(parent)
+        self.name = name
+        self.thread: QThread | None = None
+        self.worker: TaskWorker | None = None
+
+    @property
+    def busy(self) -> bool:
+        return self.thread is not None
+
+    def start(self, task) -> bool:
+        if self.busy:
+            return False
+        log.info("Tarea %s: empieza", self.name)
+        self.thread = QThread()
+        self.worker = TaskWorker(task)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.message.connect(self.message)
+        self.worker.finished.connect(self._finished)
+        self.thread.start()
+        return True
+
+    def _finished(self, result, error: str) -> None:
+        self.thread.quit()
+        self.thread.wait()
+        self.thread = None
+        self.worker = None
+        log.info("Tarea %s: termina %s", self.name, f"con error: {error}" if error else "bien")
+        self.done.emit(result, error)
+
+    def stop(self) -> None:
+        if self.thread is not None:
+            self.thread.quit()
+            self.thread.wait(3000)
+
+
+class GsiBridge(QObject):
+    """Pasa los avisos del servidor (otro hilo) al hilo de la ventana."""
+    match_ended = Signal(dict)
+    activity = Signal(str)
+
+
+def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
+    """Una lista de partidas: las de demo con todo el detalle y las del historial de Steam que no tienen demo."""
+    rows = []
+    for m in demos:
+        s = m["s"]
+        premier = ""
+        if m.get("rank_type") == 11 and m.get("rank_new"):
+            premier = f"{fmt_num(m['rank_new'], 0)} ({(m.get('rank_change') or 0):+.0f})"
+        rows.append({"id": m["id"], "played_at": m["played_at"], "mode": m["source"], "map": m["map"], "result": m["result"],
+                     "us": m["score_us"], "them": m["score_them"], "k": s["kills"], "a": s["assists"], "d": s["deaths"],
+                     "adr": s["adr"], "hs": (s["hs"] or 0) * 100 if s["hs"] is not None else None, "rating": s["rating"],
+                     "premier": premier})
+
+    def same(h: dict, m: dict) -> bool:
+        if map_label(m["map"]).lower() != h["map"].lower():
+            return False
+        try:
+            gap = abs((datetime.fromisoformat(h["played_at"]) - datetime.fromisoformat(m["played_at"])).total_seconds())
+        except ValueError:
+            return False
+        return gap <= 3 * 3600 and (h["score_us"], h["score_them"]) == (m["score_us"], m["score_them"])
+
+    for h in history:
+        if any(same(h, m) for m in demos):
+            continue
+        rows.append({"id": None, "played_at": h["played_at"], "mode": h["mode"], "map": h["map"], "result": h["result"],
+                     "us": h["score_us"], "them": h["score_them"], "k": h["kills"], "a": h["assists"], "d": h["deaths"],
+                     "adr": None, "hs": h["hsp"], "rating": None, "premier": ""})
+    rows.sort(key=lambda r: r["played_at"] or "")
+    return rows
+
+
+class MainWindow(QMainWindow):
+    NAV = [(t("ESTADÍSTICAS"), None, None), ("perfil", t("Perfil"), "profile"), ("partidas", t("Partidas"), "list"),
+           ("rango", t("Tu rango"), "rank"), ("mapas", t("Mapas"), "map"), ("latas", t("Latas"), "grenade"),
+           ("armas", t("Armas"), "target"),
+           ("utilidad", t("Utilidad y plata"), "bolt"), ("consejos", t("Consejos"), "bulb"), ("historial", t("Historial"), "history"),
+           (t("CUENTA"), None, None), ("conectar", t("Conectar Steam"), "link"), ("demos", t("Demos y aviso"), "import"),
+           ("ayuda", t("Cómo usar"), "help")]
+    TITLES = {"perfil": t("Perfil"), "partidas": t("Partidas"), "rango": t("Comparación con tu rango"), "mapas": t("Mapas"),
+              "latas": t("Latas"),
+              "armas": t("Armas"), "utilidad": t("Utilidad y plata"), "consejos": t("Consejos para mejorar"),
+              "historial": t("Historial completo"), "conectar": t("Conectar Steam"), "demos": t("Demos y aviso de fin de partida"),
+              "ayuda": t("Cómo usar CS2 Stats")}
+
+    def __init__(self, start_hidden: bool = False):
+        super().__init__()
+        self.store = Store()
+        self.settings = Settings()
+        self.view: dict | None = None
+        self.pending: list = []
+        self.thread: QThread | None = None
+        self.worker: ImportWorker | None = None
+        self.steam_runner = TaskRunner("partidas", self)
+        self.history_runner = TaskRunner("historial", self)
+        self.steam_runner.done.connect(self._steam_done)
+        self.history_runner.done.connect(self._history_done)
+        self.assets_runner = TaskRunner("recursos", self)
+        self.assets_runner.done.connect(lambda _r, _e: self.refresh())
+        self.clips_runner = TaskRunner("clips", self)
+        self.clips_runner.done.connect(self._clips_done)
+        self.stop_recording = False
+        self.quitting = False
+        self.game_dir = cs2_game_dir()
+        self.gsi_server: gsi.GsiServer | None = None
+        self.gsi_status = ""
+        self.force_import = False
+        if (self.settings["parser_version"] or 1) < PARSER_VERSION:
+            # Versión nueva del lector: se vuelven a leer las demos que siguen en la PC.
+            self.store.forget_demo_matches()
+            self.settings.set("parser_version", PARSER_VERSION)
+            self.force_import = True
+        try:
+            reload_saved_history(self.store, self.settings)
+        except (OSError, ValueError):
+            log.exception("No se pudo releer el historial guardado")
+
+        self.setWindowTitle(t("CS2 Stats"))
+        self.setWindowIcon(app_icon())
+        self.resize(1400, 920)
+        self.setMinimumSize(1150, 740)
+        self.setStyleSheet(STYLE)
+        root = QWidget()
+        root.setObjectName("root")
+        self.setCentralWidget(root)
+        outer = QHBoxLayout(root)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._sidebar())
+        content = QVBoxLayout()
+        content.setContentsMargins(0, 18, 0, 0)
+        content.setSpacing(8)
+        header = QHBoxLayout()
+        header.setContentsMargins(28, 0, 28, 0)
+        self.title = label(t("Perfil"), "pageTitle")
+        header.addWidget(self.title)
+        header.addStretch(1)
+        header.addWidget(label(t("Modo"), "smallMuted"))
+        self.mode = QComboBox()
+        self.mode.addItem(t("Todos"), "")
+        self.mode.currentIndexChanged.connect(self.refresh)
+        header.addWidget(self.mode)
+        header.addSpacing(10)
+        header.addWidget(label(t("Comparar"), "smallMuted"))
+        self.recent_n = QComboBox()
+        for n in (5, 10, 20, 50):
+            self.recent_n.addItem(t('Últimas {0}').format(n), n)
+        self.recent_n.setCurrentIndex(max(0, self.recent_n.findData(self.settings["recent_n"])))
+        self.recent_n.currentIndexChanged.connect(self._recent_changed)
+        header.addWidget(self.recent_n)
+        content.addLayout(header)
+        self.stack = QStackedWidget()
+        self.pages = {"perfil": ProfilePage(), "partidas": MatchesPage(), "rango": RankPage(), "mapas": MapsPage(),
+                      "latas": NadesPage(), "armas": WeaponsPage(), "utilidad": UtilityPage(), "consejos": AdvicePage(),
+                      "historial": HistoryPage(), "conectar": ConnectPage(), "demos": DemosPage(), "ayuda": HelpPage()}
+        for page in self.pages.values():
+            self.stack.addWidget(page)
+            page.open_match.connect(self.open_match)
+            page.go_to.connect(self.go)
+        content.addWidget(self.stack, 1)
+        outer.addLayout(content, 1)
+
+        self.pages["perfil"].sync_requested.connect(self.sync_all)
+        self.pages["partidas"].delete_requested.connect(self.delete_match)
+        nades: NadesPage = self.pages["latas"]
+        nades.loader = lambda: build_lineups(self.store.nade_data())
+        nades.record_requested.connect(self.start_recording)
+        self.clips_runner.message.connect(lambda text: nades.record_button.setText(text[:60]))
+        connect: ConnectPage = self.pages["conectar"]
+        self.steam_runner.message.connect(connect.add_log)
+        self.history_runner.message.connect(connect.add_log)
+        connect.save_codes.connect(self.save_codes)
+        connect.save_key.connect(lambda key: (self.settings.set("api_key", key), self.refresh_connect(), self.start_steam_sync()))
+        connect.connect_gc.connect(self.login_gc)
+        connect.disconnect_gc.connect(self.logout_gc)
+        connect.connect_history.connect(self.login_history)
+        connect.sync_now.connect(self.start_steam_sync)
+        connect.test_message.connect(self.test_message)
+        connect.message_toggled.connect(lambda on: (self.settings.set("steam_message", on), self.refresh_connect()))
+        connect.add_old_codes.connect(lambda codes: (self.store.add_sharecodes(codes), self.refresh_connect(), self.start_steam_sync()))
+        demos: DemosPage = self.pages["demos"]
+        demos.import_requested.connect(self.start_import)
+        demos.scan_requested.connect(self.scan)
+        demos.add_folder_requested.connect(self.add_folder)
+        demos.setting_changed.connect(self.change_setting)
+        demos.gsi_toggled.connect(self.toggle_gsi)
+        demos.dismiss_gsi.connect(lambda i: (self.store.dismiss_gsi(i), self.refresh_demos()))
+
+        self.tray = QSystemTrayIcon(app_icon(), self)
+        self.tray.setToolTip(t("CS2 Stats"))
+        menu = QMenu()
+        menu.addAction(t("Abrir CS2 Stats"), self.bring_up)
+        menu.addAction(t("Buscar partidas"), self.sync_all)
+        menu.addSeparator()
+        menu.addAction(t("Salir"), self.quit_app)
+        self.tray.setContextMenu(menu)
+        self.tray.activated.connect(lambda reason: self.bring_up() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
+        self.tray.messageClicked.connect(self.bring_up)
+        self.tray.show()
+
+        self.bridge = GsiBridge()
+        self.bridge.match_ended.connect(self.on_match_ended)
+        self.bridge.activity.connect(self.on_gsi_activity)
+        self.start_gsi()
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.scan)
+        self.timer.start(120_000)
+        self.steam_timer = QTimer(self)
+        self.steam_timer.timeout.connect(self.start_steam_sync)
+        self.steam_timer.start(20 * 60_000)
+        self.go("perfil")
+        self.refresh()
+        QTimer.singleShot(400, self.scan)
+        QTimer.singleShot(800, self.load_assets)
+        QTimer.singleShot(1500, self.start_steam_sync)
+        if not start_hidden:
+            self.show()
+
+    # Estructura
+    def _sidebar(self) -> QFrame:
+        side = QFrame()
+        side.setObjectName("sidebar")
+        side.setFixedWidth(224)
+        layout = QVBoxLayout(side)
+        layout.setContentsMargins(12, 18, 12, 16)
+        layout.setSpacing(2)
+        brand = QHBoxLayout()
+        logo = label("")
+        logo.setPixmap(app_icon().pixmap(30, 30))
+        brand.addWidget(logo)
+        brand.addWidget(label(t("CS2 Stats"), "brand"), 1)
+        layout.addLayout(brand)
+        layout.addSpacing(12)
+        self.nav_group = QButtonGroup(self)
+        self.nav: dict[str, QPushButton] = {}
+        for key, title, kind in self.NAV:
+            if title is None:
+                layout.addWidget(label(key, "navSection"))
+                continue
+            btn = QPushButton(title)
+            btn.setObjectName("navButton")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setIcon(icon(kind, MUTED, 18))
+            btn.setIconSize(QSize(18, 18))
+            btn.clicked.connect(lambda _=False, k=key: self.go(k))
+            self.nav_group.addButton(btn)
+            self.nav[key] = btn
+            layout.addWidget(btn)
+            if key == "consejos":
+                # Globito rojo con la cantidad de puntos flojos, como en la referencia.
+                inner = QHBoxLayout(btn)
+                inner.setContentsMargins(0, 0, 12, 0)
+                inner.addStretch(1)
+                self.advice_badge = label("", "navBadge")
+                self.advice_badge.hide()
+                inner.addWidget(self.advice_badge)
+        layout.addStretch(1)
+        status = QFrame()
+        status.setObjectName("sideCard")
+        status_layout = QVBoxLayout(status)
+        status_layout.setContentsMargins(12, 10, 12, 10)
+        status_layout.setSpacing(4)
+        self.sync_dot = label("", "smallMuted", wrap=True)
+        status_layout.addWidget(self.sync_dot)
+        self.gsi_dot = label("", "smallMuted", wrap=True)
+        status_layout.addWidget(self.gsi_dot)
+        layout.addWidget(status)
+        # Idioma: se aplica al volver a abrir la app (los textos se arman al iniciar).
+        language_row = QHBoxLayout()
+        language_row.addWidget(label(t("Idioma"), "smallMuted"))
+        self.language_box = QComboBox()
+        for code, name in LANGUAGES.items():
+            self.language_box.addItem(name, code)
+        self.language_box.setCurrentIndex(list(LANGUAGES).index(language()))
+        self.language_box.currentIndexChanged.connect(self.change_language)
+        language_row.addWidget(self.language_box, 1)
+        layout.addLayout(language_row)
+        return side
+
+    def change_language(self, index: int) -> None:
+        code = self.language_box.itemData(index)
+        self.settings.set("language", code)
+        QMessageBox.information(self, "CS2 Stats", t("El idioma cambia la próxima vez que abras la app.") if code == language()
+                                else EN_RESTART if code == "en" else ES_RESTART)
+
+    def go(self, key: str) -> None:
+        for name, btn in self.nav.items():
+            btn.setChecked(name == key)
+            kind = next(k for n, _t, k in self.NAV if n == name)
+            btn.setIcon(icon(kind, "#eef0f3" if name == key else MUTED, 18))
+        self.stack.setCurrentWidget(self.pages[key])
+        self.title.setText(self.TITLES[key])
+        if key == "demos":
+            self.refresh_demos()
+        if key == "conectar":
+            self.refresh_connect()
+
+    # Datos
+    def _recent_changed(self) -> None:
+        self.settings.set("recent_n", self.recent_n.currentData())
+        self.refresh()
+
+    def refresh(self) -> None:
+        steamid = self.settings["steamid"]
+        all_matches = self.store.matches(steamid)
+        for m in all_matches:
+            m["s"] = summarize(m["rounds"])
+        all_history = self.store.history(steamid)
+        sources = sorted({m["source"] for m in all_matches} | {h["mode"] for h in all_history})
+        current = self.mode.currentData()
+        self.mode.blockSignals(True)
+        self.mode.clear()
+        self.mode.addItem(t("Todos"), "")
+        for source in sources:
+            self.mode.addItem(SOURCE_NAMES.get(source, source), source)
+        self.mode.setCurrentIndex(max(0, self.mode.findData(current)))
+        self.mode.blockSignals(False)
+        mode = self.mode.currentData()
+        matches = [m for m in all_matches if not mode or m["source"] == mode]
+        history = [h for h in all_history if not mode or h["mode"] == mode]
+        n = self.recent_n.currentData() or 10
+        recent = matches[-n:]
+        name = next((m["my_name"] for m in reversed(all_matches) if m["my_name"]), "")
+        if not name:
+            name = dict(steam_accounts()).get(steamid, "")
+        premier_match = next((m for m in reversed(all_matches) if m.get("rank_type") == 11 and m.get("rank_new")), None)
+        premier = premier_match["rank_new"] if premier_match else None
+        samples = lobby_samples(all_matches)
+        total = summarize([r for m in matches for r in m["rounds"]])
+        recent_total = summarize([r for m in recent for r in m["rounds"]])
+        comparisons, reference, reference_n = compare(total, samples, premier)
+        recent_comparisons, _ref, _n = compare(recent_total, samples, premier)
+        self.view = {
+            "all_matches": all_matches, "matches": matches, "recent": recent, "n": n, "total": total,
+            "recent_total": recent_total, "insights": analyze(matches), "name": name, "data_dir": str(data_dir()),
+            "history": history, "all_history": all_history, "premier": premier, "premier_tier": tier_of(premier),
+            "comparisons": comparisons, "recent_comparisons": recent_comparisons, "reference": reference,
+            "reference_n": reference_n, "highlights": highlights(comparisons), "rows": unify_rows(matches, history),
+            "steam": steam_ready(self.settings),
+        }
+        for page in self.pages.values():
+            page.update_view(self.view)
+        weak = sum(1 for i in self.view["insights"] if i.kind == "flojo")
+        self.advice_badge.setText(str(weak))
+        self.advice_badge.setVisible(bool(weak))
+        self._update_dots()
+
+    def _update_dots(self) -> None:
+        ready = steam_ready(self.settings)
+        if self.history_runner.busy:
+            self.sync_dot.setText(t("●  Leyendo tu historial de Steam"))
+            self.sync_dot.setStyleSheet(f"color: {MUTED};")
+        elif self.steam_runner.busy:
+            self.sync_dot.setText(t("●  Buscando partidas en Steam"))
+            self.sync_dot.setStyleSheet(f"color: {MUTED};")
+        elif ready["codes"] and ready["gc"]:
+            error = self.settings["steam_error"]
+            self.sync_dot.setText(t("●  Steam: ") + (t("revisar conexión") if error else t("conectado")))
+            self.sync_dot.setStyleSheet(f"color: {BAD if error else GOOD};")
+        else:
+            self.sync_dot.setText(t("●  Steam sin conectar"))
+            self.sync_dot.setStyleSheet(f"color: {MUTED};")
+
+    def refresh_connect(self) -> None:
+        self.pages["conectar"].set_state(self.settings, self.steam_runner.busy or self.history_runner.busy,
+                                         self.store.sharecodes())
+        self._update_dots()
+
+    def refresh_demos(self) -> None:
+        page: DemosPage = self.pages["demos"]
+        folders = [str(f) for f in watched_folders(self.settings["extra_folders"])]
+        page.set_settings(self.settings, steam_accounts(), folders, self.gsi_status, self.settings["gsi_enabled"],
+                          self.settings.values.get("background", True), startup_enabled())
+        page.set_pending(len(self.pending), self.thread is not None)
+        page.set_gsi_pending(self.store.pending_gsi())
+
+    # Steam
+    def save_codes(self, auth: str, share: str) -> None:
+        self.settings.set("auth_code", auth)
+        self.settings.set("last_sharecode", share)
+        self.store.add_sharecodes([share])
+        self.refresh_connect()
+        self.start_steam_sync()
+
+    def login_gc(self) -> None:
+        dialog = LoginDialog("client", t("Conectar la cuenta secundaria"),
+                             t("Usá la cuenta nueva, no la principal. Escaneá el QR con la app de Steam del celular en la que "
+                             "agregaste esa cuenta, o usá su usuario y contraseña."), True, self)
+        if dialog.exec() and dialog.result_data:
+            data = dialog.result_data
+            if str(data.get("steamId")) == str(self.settings["steamid"]):
+                QMessageBox.warning(self, t("CS2 Stats"), t("Esa es tu cuenta principal. Para bajar demos usá una cuenta secundaria, "
+                                                       "así no se interrumpe tu juego."))
+                return
+            self.settings.set("gc_token", data["refreshToken"])
+            self.settings.set("gc_account", data.get("accountName") or "")
+            self.refresh_connect()
+            self.start_steam_sync()
+
+    def logout_gc(self) -> None:
+        self.settings.set("gc_token", "")
+        self.settings.set("gc_account", "")
+        self.refresh_connect()
+
+    def login_history(self) -> None:
+        # Sesión tipo navegador: desde 2025 Steam solo da cookies web a ese tipo (y al de la app del celular).
+        dialog = LoginDialog("web", t("Traer tu historial de Steam"),
+                             t("Escaneá el QR con la app de Steam del celular de tu cuenta principal. La sesión se usa una sola vez "
+                             "para leer \"Datos personales del juego\" y no se guarda."), False, self)
+        accepted = dialog.exec()
+        data = dialog.result_data
+        if not (accepted and data):
+            log.info("Historial: inicio de sesión cancelado o fallido (%s)", dialog.error or "sin error")
+            if dialog.error:
+                QMessageBox.warning(self, "CS2 Stats", t("Steam no completó el inicio de sesión: {0}").format(dialog.error))
+            return
+        if str(data.get("steamId")) != str(self.settings["steamid"]):
+            log.info("Historial: se escaneó otra cuenta")
+            QMessageBox.warning(self, t("CS2 Stats"), t('Esa no es la cuenta que se mide en la app ({0}). Escaneá con la app de Steam de tu cuenta principal.').format(account_name(self.settings['steamid'])))
+            return
+        cookies = data.get("cookies") or []
+        log.info("Historial: sesión iniciada, %d cookies", len(cookies))
+        self.pages["conectar"].add_log(t("Sesión iniciada. Leyendo tu historial de Steam (puede tardar unos minutos)"))
+        self.go("conectar")
+        # Corre aparte de la búsqueda de partidas: no tiene que esperar a que terminen las descargas de demos.
+        if not self.history_runner.start(lambda say: sync_history(self.store, self.settings, cookies, say)):
+            QMessageBox.information(self, t("CS2 Stats"), t("Ya se está leyendo tu historial. Esperá a que termine."))
+        self.refresh_connect()
+
+    def _history_done(self, result, error: str) -> None:
+        if error:
+            QMessageBox.warning(self, t("CS2 Stats"), t('No se pudo leer el historial: {0}').format(error))
+        else:
+            self.pages["conectar"].add_log(t('Historial actualizado ({0} partidas nuevas)').format(result))
+            self.start_steam_sync()  # el historial puede traer demos todavía disponibles
+        self.refresh()
+        self.refresh_connect()
+
+    def start_steam_sync(self) -> None:
+        ready = steam_ready(self.settings)
+        if not (ready["codes"] or ready["gc"] or ready["history"]):
+            return
+        if self.steam_runner.start(lambda say: sync_steam(self.store, self.settings, say)):
+            self.refresh_connect()
+
+    def _steam_done(self, imported, error: str) -> None:
+        if error:
+            self.settings.set("steam_error", error)
+            self.pages["conectar"].add_log(error)
+        elif imported:
+            if not self.isVisible():
+                self.tray.showMessage(t("CS2 Stats"), t('Importé {0} {1} de Steam.').format(imported, t('partida') if imported == 1 else t('partidas')),
+                                      app_icon(), 6000)
+        self.refresh()
+        self.refresh_connect()
+
+
+    def test_message(self) -> None:
+        """Manda por Steam el resumen de tu última partida analizada, para ver cómo llega."""
+        matches = self.store.matches(self.settings["steamid"])
+        if not matches:
+            QMessageBox.information(self, t("CS2 Stats"), t("Todavía no hay partidas analizadas para armar el resumen."))
+            return
+        text = match_message(matches[-1], matches[:-1])
+        connect: ConnectPage = self.pages["conectar"]
+        connect.add_log(t("Mandando un mensaje de prueba por Steam"))
+        if not self.steam_runner.start(lambda say: send_summary(self.settings, text, say)):
+            QMessageBox.information(self, t("CS2 Stats"), t("Ahora se están buscando partidas. Probá en un rato."))
+
+    def sync_all(self) -> None:
+        self.scan()
+        self.start_steam_sync()
+        self.go("conectar" if steam_ready(self.settings)["codes"] else "demos")
+
+    # Fotos de mapas, íconos y foto de perfil
+    def load_assets(self) -> None:
+        avatar = avatar_path()
+        old_avatar = not avatar.exists() or (datetime.now().timestamp() - avatar.stat().st_mtime) > 86400
+        steamid, key = self.settings["steamid"], self.settings.secret("api_key")
+
+        def task(_say):
+            extract_game_assets()
+            if old_avatar:
+                download_avatar(steamid, key)
+            return True
+        self.assets_runner.start(task)
+
+    # Clips de latas
+    def start_recording(self, map_name: str, lineups: list) -> None:
+        page: NadesPage = self.pages["latas"]
+        if self.clips_runner.busy:
+            self.stop_recording = True
+            page.record_button.setText(t("Deteniendo..."))
+            return
+        if not lineups:
+            QMessageBox.information(self, t("CS2 Stats"), t("Todas las latas de esta lista ya tienen clip."))
+            return
+        if not ffmpeg_path():
+            QMessageBox.warning(self, t("CS2 Stats"), t("Falta ffmpeg en la PC para grabar la pantalla."))
+            return
+        from ..recorder import NetCon
+        probe = NetCon()
+        already = probe.connect(1.0)
+        probe.close()
+        if not already and cs2_running():
+            QMessageBox.information(self, t("CS2 Stats"), t("Cerrá CS2 y volvé a tocar el botón: la app lo abre en modo práctica."))
+            return
+        text = (t('Voy a grabar {0} {1} de {2}.\n\n• CS2 se abre en modo práctica (opción oficial -insecure: sin VAC solo en esa sesión, en un servidor tuyo; para volver a jugar online cerrás CS2 y lo abrís normal).\n• Mientras graba no toques el mouse ni el teclado. Se graba solo la ventana de CS2.\n• Tarda unos {3} minutos. Podés detenerlo con el mismo botón.').format(len(lineups), t('clip') if len(lineups) == 1 else t('clips'), map_label(map_name), max(1, len(lineups) * 18 // 60 + 1)))
+        if QMessageBox.question(self, t("Grabar clips de latas"), text) != QMessageBox.StandardButton.Yes:
+            return
+        if not already:
+            launch_practice()
+        self.stop_recording = False
+        page.record_button.setText(t("Detener grabación"))
+        grid = page.data[1].get(map_name) if page.data else None
+        self.clips_runner.start(lambda say: record_lineups(map_name, lineups, say, lambda: self.stop_recording, grid))
+
+    def _clips_done(self, saved, error: str) -> None:
+        page: NadesPage = self.pages["latas"]
+        page.record_button.setText(t("Grabar clips de este mapa"))
+        if error:
+            QMessageBox.warning(self, t("CS2 Stats"), t('La grabación se cortó: {0}').format(error))
+        else:
+            self.bring_up()
+            QMessageBox.information(self, t("CS2 Stats"), t('Listo: {0} clips grabados. Ya podés cerrar CS2.').format(saved or 0))
+        page._draw()
+
+    # Demos locales
+    def scan(self) -> None:
+        if self.thread is not None:
+            return
+        self.pending = pending_demos(self.store, self.settings)
+        count = len(self.pending)
+        log.info("Búsqueda: %d demos nuevas", count)
+        self.nav["demos"].setText(t('Demos y aviso ({0})').format(count) if count else t("Demos y aviso"))
+        self.pages["demos"].set_pending(count, False)
+        if count and (self.settings["auto_import"] or self.force_import):
+            self.start_import()
+        self.force_import = False
+
+    def start_import(self) -> None:
+        if self.thread is not None or not self.pending:
+            return
+        self.thread = QThread(self)
+        self.worker = ImportWorker(self.store, list(self.pending), self.settings["steamid"])
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        page: DemosPage = self.pages["demos"]
+        self.worker.progress.connect(page.set_progress)
+        self.worker.item_done.connect(self._log_result)
+        self.worker.finished.connect(self._import_done)
+        page.set_pending(len(self.pending), True)
+        self.thread.start()
+
+    def _log_result(self, status: str, message: str) -> None:
+        text = {"importada": t('Importada: {0}').format(message), "duplicada": t('Repetida: {0}').format(message),
+                "no_es_tuya": t('No es tuya: {0}').format(message), "error": t('No se pudo leer: {0}').format(message)}.get(status, message)
+        color = {"importada": GOOD, "error": BAD}.get(status, MUTED)
+        self.pages["demos"].add_log(text, color)
+
+    def _import_done(self, imported: int) -> None:
+        self.thread.quit()
+        self.thread.wait()
+        self.thread = None
+        self.worker = None
+        self.pending = []
+        self.refresh()
+        self.scan()
+        self.refresh_demos()
+        if imported and not self.isVisible():
+            self.tray.showMessage(t("CS2 Stats"), t('Importé {0} {1}.').format(imported, t('partida') if imported == 1 else t('partidas')), app_icon(), 6000)
+
+    def add_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, t("Elegí una carpeta con demos"))
+        if folder and folder not in self.settings["extra_folders"]:
+            self.settings.set("extra_folders", self.settings["extra_folders"] + [folder])
+            self.refresh_demos()
+            self.scan()
+
+    def change_setting(self, key: str, value) -> None:
+        if key == "startup":
+            try:
+                set_startup(bool(value))
+            except OSError:
+                QMessageBox.warning(self, t("CS2 Stats"), t("No se pudo cambiar el inicio con Windows."))
+        elif key == "steamid":
+            self.settings.set("steamid", int(value))
+            if self.gsi_server:
+                self.gsi_server.tracker.steamid = str(value)
+            self.scan()
+            self.refresh()
+        else:
+            self.settings.set(key, value)
+            if key == "auto_import" and value:
+                self.scan()
+        self.refresh_demos()
+
+    def delete_match(self, match_id: int) -> None:
+        answer = QMessageBox.question(self, t("Borrar partida"), t("¿Borrar esta partida de tu historial? No se vuelve a importar sola."))
+        if answer == QMessageBox.StandardButton.Yes:
+            self.store.delete_match(match_id)
+            self.refresh()
+
+    def open_match(self, match_id: int) -> None:
+        match = next((m for m in self.view["all_matches"] if m["id"] == match_id), None)
+        if match:
+            dialog = MatchDialog(match, self)
+            dialog.setStyleSheet(STYLE)
+            dialog.exec()
+
+    # Aviso de fin de partida (GSI)
+    def start_gsi(self) -> None:
+        if self.gsi_server:
+            self.gsi_server.stop()
+            self.gsi_server = None
+        port, token = self.settings["gsi_port"], self.settings["gsi_token"]
+        if not self.settings["gsi_enabled"]:
+            self.gsi_status = t("Desactivado. Las partidas se importan igual; solo no vas a recibir el aviso al terminar.")
+            self.gsi_dot.setText(t("●  Aviso de fin de partida apagado"))
+            return
+        if not self.game_dir:
+            self.gsi_status = t("No encontré CS2 instalado en esta PC, así que no se puede activar el aviso.")
+            self.gsi_dot.setText(t("●  CS2 no encontrado"))
+            return
+        fresh = not gsi.is_installed(self.game_dir, port, token)
+        if fresh:
+            try:
+                gsi.install(self.game_dir, port, token)
+            except OSError:
+                self.gsi_status = t("No pude crear el archivo en la carpeta de CS2.")
+                self.gsi_dot.setText(t("●  Aviso sin activar"))
+                return
+        tracker = gsi.MatchTracker(self.settings["steamid"], self.bridge.match_ended.emit, self.bridge.activity.emit)
+        self.gsi_server = gsi.GsiServer(port, token, tracker)
+        if not self.gsi_server.start():
+            self.gsi_server = None
+            self.gsi_status = t("Otra copia de CS2 Stats ya está escuchando el aviso.")
+            self.gsi_dot.setText(t("●  Aviso en otra ventana"))
+            return
+        restart = t(" Si CS2 estaba abierto, cerralo y abrilo una vez para que lo tome.") if fresh else ""
+        self.gsi_status = t("Activo. Cuando termine una partida tuya, la app busca la demo sola.") + restart
+        self.gsi_dot.setText(t("●  Escuchando el fin de partida"))
+        self.gsi_dot.setStyleSheet(f"color: {GOOD};")
+
+    def toggle_gsi(self, enabled: bool) -> None:
+        self.settings.set("gsi_enabled", bool(enabled))
+        if not enabled:
+            if self.gsi_server:
+                self.gsi_server.stop()
+                self.gsi_server = None
+            if self.game_dir:
+                gsi.uninstall(self.game_dir)
+            self.gsi_dot.setStyleSheet("")
+        self.start_gsi()
+        self.refresh_demos()
+
+    def on_gsi_activity(self, phase: str) -> None:
+        if phase in ("live", "warmup", "intermission"):
+            self.gsi_dot.setText(t("●  Partida en curso"))
+
+    def on_match_ended(self, data: dict) -> None:
+        self.store.add_gsi_match(data)
+        self.gsi_dot.setText(t("●  Escuchando el fin de partida"))
+        ready = steam_ready(self.settings)
+        if ready["codes"] and ready["gc"]:
+            text = (t('Terminaste {0} {1} a {2}. En unos minutos la demo se baja y se analiza sola.').format(map_label(data['map']), data['score_us'], data['score_them']))
+        else:
+            text = (t('Terminaste {0} {1} a {2} ({3}/{4}/{5}). Bajá la demo y la importo.').format(map_label(data['map']), data['score_us'], data['score_them'], data['kills'], data['deaths'], data['assists']))
+        self.tray.showMessage(t("Partida terminada"), text, app_icon(), 10000)
+        self.refresh_demos()
+        if ready["gc"] and self.settings["steam_message"]:
+            self.settings.set("message_pending", data)   # sale por Steam cuando se analice la demo
+        # Valve tarda unos minutos en publicar el código y la demo. A los 31 minutos sale el mensaje aunque no haya demo.
+        for minutes in (3, 8, 20, 31):
+            QTimer.singleShot(minutes * 60_000, self.start_steam_sync)
+        QTimer.singleShot(90_000, self.scan)
+
+    # Ventana y bandeja
+    def bring_up(self) -> None:
+        self.show()
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+        self.raise_()
+        self.activateWindow()
+
+    def quit_app(self) -> None:
+        self.quitting = True
+        self.close()
+
+    def closeEvent(self, event):  # noqa: N802
+        if not self.quitting and self.settings.values.get("background", True) and self.gsi_server:
+            event.ignore()
+            self.hide()
+            if not self.settings.values.get("tray_hint_shown"):
+                self.settings.set("tray_hint_shown", True)
+                self.tray.showMessage(t("CS2 Stats sigue abierta"), t("Quedó en la bandeja para avisarte cuando termine tu partida. "
+                                      "Clic derecho en el ícono para salir."), app_icon(), 8000)
+            return
+        if self.thread is not None:
+            self.thread.quit()
+            self.thread.wait(3000)
+        self.steam_runner.stop()
+        self.history_runner.stop()
+        self.stop_recording = True
+        self.clips_runner.stop()
+        self.assets_runner.stop()
+        if self.gsi_server:
+            self.gsi_server.stop()
+        self.tray.hide()
+        QApplication.quit()
+        event.accept()

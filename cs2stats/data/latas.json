@@ -1,0 +1,3762 @@
+[
+ {
+  "id": "mirage-connector-from-t-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Conector",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1383.830566,
+   70.96875,
+   -103.96875
+  ],
+  "ang": [
+   -20.797297,
+   -157.145142
+  ],
+  "land": [
+   -624.9,
+   -885.1,
+   -254.0
+  ],
+  "flight": 5.6,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá la mira con el medio de la puerta y el borde de abajo",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/connector-from-t-spawn",
+  "to_en": "Connector",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Align to middle of door and bottom of border",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-jungle-from-t-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Jungla",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1422.968506,
+   -367.96875,
+   -103.96875
+  ],
+  "ang": [
+   -35.549023,
+   -148.858917
+  ],
+  "land": [
+   -799.2,
+   -1710.6,
+   -178.0
+  ],
+  "flight": 9.4,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá donde se juntan la madera y el borde",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/jungle-from-t-spawn",
+  "to_en": "Jungle",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim where wood and border meet",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-stairs-from-t-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Cabezinha",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1422.966797,
+   -367.96875,
+   -104.128754
+  ],
+  "ang": [
+   -46.863644,
+   -146.532104
+  ],
+  "land": [
+   -480.4,
+   -1626.2,
+   -38.0
+  ],
+  "flight": 9.3,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la derecha de la línea de tierra, sobre la línea horizontal",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/stairs-from-t-spawn",
+  "to_en": "Stairs",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Align to right of dirt line and horizontal line",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-ticket-booth-from-t-spawn-fence",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "CT",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1258.119507,
+   -871.971863,
+   -79.96875
+  ],
+  "ang": [
+   -26.995901,
+   -144.536819
+  ],
+  "land": [
+   -931.1,
+   -2432.3,
+   -156.5
+  ],
+  "flight": 6.5,
+  "steps": [
+   "Pegate a la reja de Spawn T",
+   "Poné la mira en el punto que marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/ticket-booth-from-t-spawn-fence",
+  "to_en": "Ticket Booth",
+  "frm_en": "T Spawn Fence",
+  "steps_en": [
+   "Stand where the clip shows",
+   "Put your crosshair on the spot marked in the clip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-top-mid-from-t-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Top Mid",
+  "frm": "Spawn T",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1422.970337,
+   70.96875,
+   -55.699707
+  ],
+  "ang": [
+   -33.431511,
+   -160.986145
+  ],
+  "land": [
+   -318.5,
+   -526.5,
+   -142.0
+  ],
+  "flight": 5.0,
+  "steps": [
+   "Subite a la basura de la esquina",
+   "Apuntá a la punta de la antena",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/top-mid-from-t-spawn",
+  "to_en": "Top Mid",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner on garbage",
+   "Aim at tip of antenna",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "mirage-catwalk-from-t-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "L",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1422.968994,
+   36.468761,
+   -104.128754
+  ],
+  "ang": [
+   -29.73851,
+   -173.694839
+  ],
+  "land": [
+   -787.7,
+   -236.3,
+   -158.0
+  ],
+  "flight": 8.5,
+  "steps": [
+   "Parate a la derecha del tacho",
+   "Apuntá donde se juntan los edificios",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/catwalk-from-t-spawn",
+  "to_en": "Catwalk",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand to right of trash can",
+   "Aim where buildings meet",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-jungle-from-a-ramp",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Jungla",
+  "frm": "Rampa A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   907.886047,
+   -1036.03125,
+   -194.61908
+  ],
+  "ang": [
+   -56.234268,
+   -161.656998
+  ],
+  "land": [
+   -669.3,
+   -1644.3,
+   -170.0
+  ],
+  "flight": 7.9,
+  "steps": [
+   "Parate a la derecha del marco de la puerta",
+   "Apuntá a la derecha del soporte de la soga",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/jungle-from-a-ramp",
+  "to_en": "Jungle",
+  "frm_en": "A Ramp",
+  "steps_en": [
+   "Stand at right of door frame",
+   "Aim at right of rope holder",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-stairs-from-a-ramp",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Cabezinha",
+  "frm": "Rampa A",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1148.765991,
+   -1183.968262,
+   -143.171799
+  ],
+  "ang": [
+   -41.636101,
+   -165.239334
+  ],
+  "land": [
+   -451.9,
+   -1605.7,
+   -38.0
+  ],
+  "flight": 5.1,
+  "steps": [
+   "Parate en Rampa A como en el clip",
+   "Poné la mira en el punto que marca el clip",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/stairs-from-a-ramp",
+  "to_en": "Stairs",
+  "frm_en": "A Ramp",
+  "steps_en": [
+   "Stand where the clip shows",
+   "Put your crosshair on the spot marked in the clip",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "mirage-ticket-booth-from-a-ramp",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "CT",
+  "frm": "Rampa A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   872.438599,
+   -1036.029541,
+   -194.96405
+  ],
+  "ang": [
+   -13.902396,
+   -142.189148
+  ],
+  "land": [
+   -900.5,
+   -2402.7,
+   -166.0
+  ],
+  "flight": 5.7,
+  "steps": [
+   "Parate en Rampa A como en el clip",
+   "Poné la mira en el punto que marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/ticket-booth-from-a-ramp",
+  "to_en": "Ticket Booth",
+  "frm_en": "A Ramp",
+  "steps_en": [
+   "Stand where the clip shows",
+   "Put your crosshair on the spot marked in the clip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-triple-from-a-ramp",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Triple",
+  "frm": "Rampa A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   935.809753,
+   -1032.234497,
+   -195.130371
+  ],
+  "ang": [
+   -29.288382,
+   -148.520248
+  ],
+  "land": [
+   -741.3,
+   -2246.1,
+   -178.0
+  ],
+  "flight": 7.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la punta del pilar",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/triple-from-a-ramp",
+  "to_en": "Triple",
+  "frm_en": "A Ramp",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at tip of pillar",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-market-window-from-back-alley",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Ventana de Market",
+  "frm": "Back Alley",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -160.03125,
+   887.96875,
+   -71.64798
+  ],
+  "ang": [
+   -50.280293,
+   -146.48848
+  ],
+  "land": [
+   -1942.5,
+   -239.6,
+   -166.0
+  ],
+  "flight": 7.1,
+  "steps": [
+   "Parate en Back Alley como en el clip",
+   "Poné la mira en el punto que marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/market-window-from-back-alley",
+  "to_en": "Market Window",
+  "frm_en": "Back Alley",
+  "steps_en": [
+   "Stand where the clip shows",
+   "Put your crosshair on the spot marked in the clip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-market-door-from-back-alley",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Puerta de Market",
+  "frm": "Back Alley",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -161.031006,
+   450.875763,
+   -10.753876
+  ],
+  "ang": [
+   -11.539766,
+   -161.965912
+  ],
+  "land": [
+   -2383.3,
+   -251.4,
+   -165.9
+  ],
+  "flight": 6.1,
+  "steps": [
+   "Parate en Back Alley como en el clip",
+   "Poné la mira en el punto que marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/market-door-from-back-alley",
+  "to_en": "Market Door",
+  "frm_en": "Back Alley",
+  "steps_en": [
+   "Stand where the clip shows",
+   "Put your crosshair on the spot marked in the clip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-palace-from-ct-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Palacio",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -2031.972656,
+   -1764.757935,
+   -226.72934
+  ],
+  "ang": [
+   -28.193851,
+   -10.92507
+  ],
+  "land": [
+   30.6,
+   -2195.3,
+   -36.0
+  ],
+  "flight": 5.6,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá arriba a la izquierda de la ventana de adentro",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/palace-from-ct-spawn",
+  "to_en": "Palace",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at top left of inner window",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-a-ramp-from-ct-spawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Rampa A",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -2026.395874,
+   -2029.96875,
+   -237.853271
+  ],
+  "ang": [
+   -23.651775,
+   15.195736
+  ],
+  "land": [
+   308.1,
+   -1446.6,
+   -174.0
+  ],
+  "flight": 6.2,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá arriba del soporte de más a la izquierda",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/a-ramp-from-ct-spawn",
+  "to_en": "A Ramp",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim above leftmost support",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-firebox-from-stairs",
+  "map": "de_mirage",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Caja de fuego",
+  "frm": "Cabezinha",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -543.129211,
+   -1309.03125,
+   -101.968735
+  ],
+  "ang": [
+   -15.867978,
+   -73.784325
+  ],
+  "land": [
+   -223.3,
+   -2398.7,
+   -168.0
+  ],
+  "flight": 2.1,
+  "steps": [
+   "Parate en el medio de la tabla clara",
+   "Apuntá al primer escalón",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/molotovs/firebox-from-stairs",
+  "to_en": "Firebox",
+  "frm_en": "Stairs",
+  "steps_en": [
+   "Stand in middle of light plank",
+   "Aim at first stair",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "mirage-dark-from-tetris",
+  "map": "de_mirage",
+  "type": "molotov",
+  "side": "T",
+  "to": "Dark",
+  "frm": "Tetris",
+  "technique": "left",
+  "movement": "crouched_stationary",
+  "pos": [
+   -31.915405,
+   -1418.03125,
+   -104.374969
+  ],
+  "ang": [
+   -6.62813,
+   -104.814873
+  ],
+  "land": [
+   -24.5,
+   -2039.3,
+   -42.0
+  ],
+  "flight": 1.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Agachate y apuntá a la izquierda de la madera de arriba",
+   "Agachado, soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/molotovs/dark-from-tetris",
+  "to_en": "Dark",
+  "frm_en": "Tetris",
+  "steps_en": [
+   "Stand in corner",
+   "Crouch, aim at left of top wood",
+   "Crouched, release with left click"
+  ]
+ },
+ {
+  "id": "mirage-a-ramp-from-triple-box",
+  "map": "de_mirage",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Rampa A",
+  "frm": "Triple",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   -897.986023,
+   -2331.135498,
+   -104.993301
+  ],
+  "ang": [
+   -16.469255,
+   43.683067
+  ],
+  "land": [
+   263.5,
+   -1582.2,
+   -176.0
+  ],
+  "flight": 2.1,
+  "steps": [
+   "Parate más o menos en los escalones",
+   "Apuntá a las ventanas de la derecha",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.15,
+  "source": "https://csnades.gg/mirage/molotovs/a-ramp-from-triple-box",
+  "to_en": "A Ramp",
+  "frm_en": "Triple Box",
+  "steps_en": [
+   "Stand roughly on the stairs",
+   "Aim at right windows",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "mirage-b-site-from-apts",
+  "map": "de_mirage",
+  "type": "flash",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Apartamentos",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -1471.96875,
+   664.03125,
+   16.03125
+  ],
+  "ang": [
+   -5.656129,
+   110.627747
+  ],
+  "land": [
+   -1542.7,
+   784.7,
+   -46.0
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la marquita",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/flashbangs/b-site-from-apts",
+  "to_en": "B Site",
+  "frm_en": "Apts",
+  "steps_en": [
+   "Stand in corner",
+   "Aim on small mark",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "mirage-balcony-from-palace",
+  "map": "de_mirage",
+  "type": "flash",
+  "side": "T",
+  "to": "Balcón",
+  "frm": "Palacio",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   367.971466,
+   -2143.639893,
+   24.032524
+  ],
+  "ang": [
+   -8.245065,
+   -127.355423
+  ],
+  "land": [
+   175.7,
+   -2384.4,
+   -36.0
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en el borde del pilar",
+   "Apuntá a la mancha que marca el clip",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/flashbangs/balcony-from-palace",
+  "to_en": "Balcony",
+  "frm_en": "Palace",
+  "steps_en": [
+   "Stand at edge of pillar",
+   "Aim at the spot shown in the clip",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-xbox-from-t-spawn-corner",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Xbox",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -299.96875,
+   -1161.93103,
+   136.256561
+  ],
+  "ang": [
+   -16.521105,
+   90.546722
+  ],
+  "land": [
+   -316.3,
+   1291.7,
+   -121.6
+  ],
+  "flight": 5.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá la mira arriba de la antena y con la línea de sombra",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/xbox-from-t-spawn-corner",
+  "to_en": "XBox",
+  "frm_en": "T Spawn Corner",
+  "steps_en": [
+   "Stand in corner",
+   "Align above antenna and to shadow line",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-ct-spawn-from-xbox",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "CT",
+  "frm": "Xbox",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -275.03125,
+   1345.415039,
+   -58.539078
+  ],
+  "ang": [
+   -37.483829,
+   131.7854
+  ],
+  "land": [
+   -217.6,
+   2126.1,
+   -124.8
+  ],
+  "flight": 5.3,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá entre los puntitos",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/ct-spawn-from-xbox",
+  "to_en": "CT Spawn",
+  "frm_en": "XBox",
+  "steps_en": [
+   "Stand in corner",
+   "Aim between the dots",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-a-cross-from-long-doors",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Cruce de Long",
+  "frm": "Puertas de Long",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   860.03125,
+   790.03064,
+   65.400719
+  ],
+  "ang": [
+   -25.430794,
+   43.542336
+  ],
+  "land": [
+   1210.5,
+   2142.6,
+   2.4
+  ],
+  "flight": 4.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá con el farol y el cable",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.15,
+  "source": "https://csnades.gg/dust2/smokes/a-cross-from-long-doors",
+  "to_en": "A Cross",
+  "frm_en": "Long Doors",
+  "steps_en": [
+   "Stand in corner",
+   "Align to lamp and wire",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "dust2-long-corner-from-outside-a-long",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Esquina de Long",
+  "frm": "Afuera de Long",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   649.568481,
+   -186.747192,
+   61.964893
+  ],
+  "ang": [
+   -37.637314,
+   69.328232
+  ],
+  "land": [
+   1199.9,
+   1171.9,
+   2.0
+  ],
+  "flight": 4.1,
+  "steps": [
+   "Parate en la esquina del taxi",
+   "Apuntá donde el edificio se cruza con la hoja",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/long-corner-from-outside-a-long",
+  "to_en": "Long Corner",
+  "frm_en": "Outside A Long",
+  "steps_en": [
+   "Stand at corner of taxi",
+   "Aim at intersection of building and leaf",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-b-doors-from-outside-b-tunnels",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Puertas de B",
+  "frm": "Túneles",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1332.023926,
+   491.954468,
+   71.871246
+  ],
+  "ang": [
+   -54.965591,
+   88.335632
+  ],
+  "land": [
+   -1285.5,
+   2321.3,
+   10.3
+  ],
+  "flight": 8.1,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina de adentro de la mancha grande",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/b-doors-from-outside-b-tunnels",
+  "to_en": "B Doors",
+  "frm_en": "Outside B Tunnels",
+  "steps_en": [
+   "Stand in corner",
+   "Aim in inner corner of large spot",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-b-window-from-outside-b-tunnels",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Ventana B",
+  "frm": "Túneles",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1332.026001,
+   491.96698,
+   72.03125
+  ],
+  "ang": [
+   -49.104042,
+   89.16671
+  ],
+  "land": [
+   -1291.8,
+   2717.3,
+   114.5
+  ],
+  "flight": 8.2,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la izquierda del punto de abajo",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/b-window-from-outside-b-tunnels",
+  "to_en": "B Window",
+  "frm_en": "Outside B Tunnels",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at left of bottom dot",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-short-from-short",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Short",
+  "frm": "Short",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   489.967926,
+   1446.027344,
+   64.415886
+  ],
+  "ang": [
+   -6.497169,
+   88.287483
+  ],
+  "land": [
+   512.9,
+   2219.6,
+   98.0
+  ],
+  "flight": 1.8,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá arriba de la baranda, en el hueco",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/short-from-short",
+  "to_en": "Short",
+  "frm_en": "Short",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at top of railing in gap",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-tunnels-entry-from-upper-tunnels",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Salida de túneles",
+  "frm": "Túneles altos",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -1833.731812,
+   1225.165527,
+   96.127792
+  ],
+  "ang": [
+   -11.397231,
+   119.489494
+  ],
+  "land": [
+   -1813.4,
+   2019.6,
+   -1.9
+  ],
+  "flight": 3.7,
+  "steps": [
+   "Parate en el medio de la caja",
+   "Apuntá entre las manchas de tierra",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/tunnels-entry-from-upper-tunnels",
+  "to_en": "Tunnels Entry",
+  "frm_en": "Upper Tunnels",
+  "steps_en": [
+   "Stand in middle of box",
+   "Aim between dirts",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-long-doors-from-car",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Puertas de Long",
+  "frm": "Auto",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1783.865845,
+   2080.022705,
+   67.510422
+  ],
+  "ang": [
+   -7.305259,
+   -132.512497
+  ],
+  "land": [
+   597.7,
+   829.8,
+   2.8
+  ],
+  "flight": 5.5,
+  "steps": [
+   "Parate debajo del cartel de taxi",
+   "Apuntá abajo a la derecha de la ventana",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/long-doors-from-car",
+  "to_en": "Long Doors",
+  "frm_en": "Car",
+  "steps_en": [
+   "Stand below taxi sign",
+   "Aim at bottom right of window",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-bottom-mid-from-ct-mid",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Mid",
+  "frm": "CT Mid",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -337.029907,
+   2423.972168,
+   -27.882072
+  ],
+  "ang": [
+   -21.134802,
+   -101.763184
+  ],
+  "land": [
+   -402.8,
+   1211.0,
+   -111.2
+  ],
+  "flight": 4.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la punta del andamio",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/smokes/bottom-mid-from-ct-mid",
+  "to_en": "Bottom Mid",
+  "frm_en": "CT Mid",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at tip of scaffolding",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-car-from-long-doors",
+  "map": "de_dust2",
+  "type": "molotov",
+  "side": "T",
+  "to": "Auto",
+  "frm": "Puertas de Long",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   847.597229,
+   790.03125,
+   111.035896
+  ],
+  "ang": [
+   5.790187,
+   54.692131
+  ],
+  "land": [
+   1641.3,
+   1911.1,
+   -0.3
+  ],
+  "flight": 2.2,
+  "steps": [
+   "Subite al barril de la esquina",
+   "Apuntá arriba del cuadrado negro al lado de la puerta",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/molotovs/car-from-long-doors",
+  "to_en": "Car",
+  "frm_en": "Long Doors",
+  "steps_en": [
+   "Stand in corner on barrel",
+   "Aim at top of black square next to door",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-short-from-lower-tunnel",
+  "map": "de_dust2",
+  "type": "molotov",
+  "side": "T",
+  "to": "Short",
+  "frm": "Túneles bajos",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -520.888062,
+   1382.02832,
+   -48.270035
+  ],
+  "ang": [
+   -6.076642,
+   -2.054506
+  ],
+  "land": [
+   266.8,
+   1353.8,
+   0.2
+  ],
+  "flight": 1.3,
+  "steps": [
+   "Parate en el marco de la puerta",
+   "Apuntá a la esquina de la caja",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/molotovs/short-from-lower-tunnel",
+  "to_en": "Short",
+  "frm_en": "Lower Tunnel",
+  "steps_en": [
+   "Stand in door frame",
+   "Aim at corner of box",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-under-b-window-from-scaffolding",
+  "map": "de_dust2",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Bajo ventana B",
+  "frm": "Andamio",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1273.96875,
+   2575.96875,
+   128.820557
+  ],
+  "ang": [
+   0.807917,
+   10.789516
+  ],
+  "land": [
+   -1548.5,
+   2711.7,
+   6.1
+  ],
+  "flight": 2.2,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá al medio de la sombra",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/molotovs/under-b-window-from-scaffolding",
+  "to_en": "Under B Window",
+  "frm_en": "Scaffolding",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at middle of shadow",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-a-long-from-outside-long",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "T",
+  "to": "Long",
+  "frm": "Afuera de Long",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   363.96875,
+   -383.960327,
+   66.72657
+  ],
+  "ang": [
+   -7.039104,
+   49.579628
+  ],
+  "land": [
+   1056.7,
+   429.4,
+   429.9
+  ],
+  "flight": 1.8,
+  "steps": [
+   "Parate en el borde de la pared",
+   "Apuntá abajo a la izquierda de la palmera",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/flashbangs/a-long-from-outside-long",
+  "to_en": "A Long",
+  "frm_en": "Outside Long",
+  "steps_en": [
+   "Stand at edge of wall",
+   "Aim at bottom left of palm tree",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-fence-from-upper-tunnels",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Túneles altos",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   -1894.421631,
+   1237.765747,
+   95.526932
+  ],
+  "ang": [
+   -12.787498,
+   102.330284
+  ],
+  "land": [
+   -2167.5,
+   2357.6,
+   136.0
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate más o menos acá",
+   "Apuntá arriba de la ventana",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.4,
+  "source": "https://csnades.gg/dust2/flashbangs/fence-from-upper-tunnels",
+  "to_en": "Fence",
+  "frm_en": "Upper Tunnels",
+  "steps_en": [
+   "Stand roughly here",
+   "Aim above window",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "dust2-mid-doors-from-xbox",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "T",
+  "to": "Puertas de Mid",
+  "frm": "Xbox",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -275.028809,
+   1343.400635,
+   -58.953842
+  ],
+  "ang": [
+   -36.40871,
+   61.362038
+  ],
+  "land": [
+   -441.4,
+   1688.4,
+   -122.1
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina de la caja",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/flashbangs/mid-doors-from-xbox",
+  "to_en": "Mid Doors",
+  "frm_en": "XBox",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at box corner",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "dust2-long-doors-from-ct-cross",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "CT",
+  "to": "Puertas de Long",
+  "frm": "Cruce CT",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1249.811523,
+   2038.03125,
+   65.386116
+  ],
+  "ang": [
+   -42.117085,
+   -81.232803
+  ],
+  "land": [
+   1364.6,
+   1294.1,
+   462.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en el borde de la pared",
+   "Apuntá arriba de la cruz",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/dust2/flashbangs/long-doors-from-ct-cross",
+  "to_en": "Long Doors",
+  "frm_en": "CT Cross",
+  "steps_en": [
+   "Stand at edge of wall",
+   "Aim above plus/cross",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "inferno-ct-from-banana",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "CT",
+  "frm": "Banana",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   120.611656,
+   1593.880737,
+   169.626251
+  ],
+  "ang": [
+   -32.122128,
+   55.047455
+  ],
+  "land": [
+   1002.1,
+   2741.3,
+   132.5
+  ],
+  "flight": 3.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la punta del edificio",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/ct-from-banana",
+  "to_en": "CT",
+  "frm_en": "Banana",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at tip of building",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "inferno-coffins-from-half-wall-a",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "Coffins",
+  "frm": "Medio muro",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   423.931122,
+   1761.745117,
+   198.031235
+  ],
+  "ang": [
+   -18.792429,
+   87.284302
+  ],
+  "land": [
+   484.0,
+   3001.9,
+   162.8
+  ],
+  "flight": 6.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Agachate y apuntá a la parte naranja que marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/coffins-from-half-wall-a",
+  "to_en": "Coffins",
+  "frm_en": "Half-Wall",
+  "steps_en": [
+   "Stand in corner",
+   "Crouch, aim at the orange spot shown in the clip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-moto-from-alt-mid",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "Moto",
+  "frm": "Alt Mid",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   729.032532,
+   183.914368,
+   154.538345
+  ],
+  "ang": [
+   -56.059471,
+   23.410418
+  ],
+  "land": [
+   2444.4,
+   926.5,
+   166.7
+  ],
+  "flight": 7.9,
+  "steps": [
+   "Parate a la derecha del portón",
+   "Apuntá abajo de la madera, a la izquierda de la ventana",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/moto-from-alt-mid",
+  "to_en": "Moto",
+  "frm_en": "Alt-Mid",
+  "steps_en": [
+   "Stand at right of garage door",
+   "Aim at bottom of wood to left of window",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-pit-from-alt-mid",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "Pozo",
+  "frm": "Alt Mid",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   187.96875,
+   -197.96875,
+   131.306793
+  ],
+  "ang": [
+   -22.09659,
+   3.939515
+  ],
+  "land": [
+   2548.2,
+   -65.3,
+   97.5
+  ],
+  "flight": 6.3,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá en diagonal arriba a la derecha, como en el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/pit-from-alt-mid",
+  "to_en": "Pit",
+  "frm_en": "Alt Mid",
+  "steps_en": [
+   "Stand in corner",
+   "Aim 45° up and to the right, as in the clip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-library-from-alt-mid",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "Biblioteca",
+  "frm": "Alt Mid",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   807.03125,
+   -290.96875,
+   153.03125
+  ],
+  "ang": [
+   -48.684139,
+   40.793961
+  ],
+  "land": [
+   2503.5,
+   1165.2,
+   161.2
+  ],
+  "flight": 7.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá arriba a la derecha del marco de la puerta",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/library-from-alt-mid",
+  "to_en": "Library",
+  "frm_en": "Alt Mid",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at top right of door frame",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-boiler-from-alt-mid",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "Boiler",
+  "frm": "Alt Mid",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   729.031494,
+   243.912567,
+   155.573914
+  ],
+  "ang": [
+   -19.713053,
+   41.69558
+  ],
+  "land": [
+   1472.3,
+   303.9,
+   130.0
+  ],
+  "flight": 3.9,
+  "steps": [
+   "Parate en el medio de la ventana",
+   "Apuntá entre las ventanas",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/boiler-from-alt-mid",
+  "to_en": "Boiler",
+  "frm_en": "Alt Mid",
+  "steps_en": [
+   "Stand at middle of window",
+   "Aim between windows",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "inferno-half-wall-from-ct-spawn",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Medio muro",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   2537.322998,
+   2468.384521,
+   188.236343
+  ],
+  "ang": [
+   -25.922775,
+   -165.315002
+  ],
+  "land": [
+   255.9,
+   1764.0,
+   123.5
+  ],
+  "flight": 5.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá un poco a la derecha de donde se cruzan los edificios",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/half-wall-from-ct-spawn",
+  "to_en": "Half Wall",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim a bit right of intersection of buildings",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-b-entrance-from-ct",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Banana",
+  "frm": "CT",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1441.968628,
+   2983.96875,
+   192.032013
+  ],
+  "ang": [
+   -16.613552,
+   -148.700287
+  ],
+  "land": [
+   623.6,
+   2430.1,
+   164.0
+  ],
+  "flight": 3.5,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá al ladrillo del poste de luz",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/smokes/b-entrance-from-ct",
+  "to_en": "B Entrance",
+  "frm_en": "CT",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at brick/light pole",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "inferno-new-box-from-car",
+  "map": "de_inferno",
+  "type": "molotov",
+  "side": "T",
+  "to": "Caja nueva",
+  "frm": "Auto",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   479.274414,
+   2017.96875,
+   200.031311
+  ],
+  "ang": [
+   -10.588449,
+   123.033058
+  ],
+  "land": [
+   157.5,
+   2542.3,
+   179.6
+  ],
+  "flight": 2.0,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá con la parte de abajo de la mancha y de la línea",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/molotovs/new-box-from-car",
+  "to_en": "New Box",
+  "frm_en": "Car",
+  "steps_en": [
+   "Stand in corner",
+   "Align to bottom of spot and bottom of line",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-quad-from-top-mid",
+  "map": "de_inferno",
+  "type": "molotov",
+  "side": "T",
+  "to": "Quad",
+  "frm": "Top Mid",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   1136.3479,
+   587.96875,
+   179.430145
+  ],
+  "ang": [
+   -19.877815,
+   -44.787476
+  ],
+  "land": [
+   1444.7,
+   -43.5,
+   134.0
+  ],
+  "flight": 2.0,
+  "steps": [
+   "Parate en el medio del portón",
+   "Apuntá al soporte del techo",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.15,
+  "source": "https://csnades.gg/inferno/molotovs/quad-from-top-mid",
+  "to_en": "Quad",
+  "frm_en": "Top Mid",
+  "steps_en": [
+   "Stand at middle of garage door",
+   "Aim at roof support",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "inferno-banana-from-top-banana",
+  "map": "de_inferno",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Banana",
+  "frm": "Top Banana",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   772.065491,
+   2129.185547,
+   200.031311
+  ],
+  "ang": [
+   -5.238741,
+   -144.06424
+  ],
+  "land": [
+   150.9,
+   1274.1,
+   96.5
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate más o menos en la punta de la sombra",
+   "Apuntá a la derecha de la maceta",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.15,
+  "source": "https://csnades.gg/inferno/molotovs/banana-from-top-banana",
+  "to_en": "Banana",
+  "frm_en": "Top Banana",
+  "steps_en": [
+   "Stand roughly at tip of shadow",
+   "Aim at right of flower pot",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "inferno-new-box-from-ct",
+  "map": "de_inferno",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Caja nueva",
+  "frm": "CT",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   1313.96875,
+   2645.04126,
+   198.234177
+  ],
+  "ang": [
+   -17.534555,
+   -179.065979
+  ],
+  "land": [
+   143.6,
+   2625.2,
+   161.5
+  ],
+  "flight": 2.1,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la izquierda del borde",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.15,
+  "source": "https://csnades.gg/inferno/molotovs/new-box-from-ct",
+  "to_en": "New Box",
+  "frm_en": "CT",
+  "steps_en": [
+   "Stand in corner",
+   "Aim to left of edge/tip",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "inferno-balcony-from-apts",
+  "map": "de_inferno",
+  "type": "flash",
+  "side": "T",
+  "to": "Balcón",
+  "frm": "Apartamentos",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1579.335571,
+   -377.96875,
+   320.03125
+  ],
+  "ang": [
+   -24.480705,
+   -30.09289
+  ],
+  "land": [
+   1791.1,
+   -388.2,
+   260.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en el pilar de madera",
+   "Agachate y apuntá a la ventana de la izquierda",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/flashbangs/balcony-from-apts",
+  "to_en": "Balcony",
+  "frm_en": "Apts",
+  "steps_en": [
+   "Stand at wood pillar",
+   "Crouch, aim at left window",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "inferno-top-mid-from-underpass",
+  "map": "de_inferno",
+  "type": "flash",
+  "side": "T",
+  "to": "Top Mid",
+  "frm": "Underpass",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   292.988708,
+   648.044922,
+   75.77092
+  ],
+  "ang": [
+   -18.219749,
+   -8.62345
+  ],
+  "land": [
+   1280.3,
+   498.3,
+   145.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá entre la punta de la chimenea y la pared",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/flashbangs/top-mid-from-underpass",
+  "to_en": "Top Mid",
+  "frm_en": "Underpass",
+  "steps_en": [
+   "Stand in corner",
+   "Aim between top of chimney and wall",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "inferno-short-from-pit",
+  "map": "de_inferno",
+  "type": "flash",
+  "side": "CT",
+  "to": "Short",
+  "frm": "Pozo",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   2445.03125,
+   -226.03125,
+   162.775665
+  ],
+  "ang": [
+   -10.608932,
+   158.623093
+  ],
+  "land": [
+   1489.8,
+   147.9,
+   139.8
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la punta del techo",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/inferno/flashbangs/short-from-pit",
+  "to_en": "Short",
+  "frm_en": "Pit",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at tip of roof",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "ancient-ct-from-outside-a",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "CT",
+  "frm": "Afuera de A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1934.369507,
+   -862.027649,
+   49.846832
+  ],
+  "ang": [
+   -43.344669,
+   67.021294
+  ],
+  "land": [
+   -1049.8,
+   1130.8,
+   67.5
+  ],
+  "flight": 6.4,
+  "steps": [
+   "Parate en el medio de la baranda",
+   "Apuntá donde se cruzan los edificios",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/ct-from-outside-a",
+  "to_en": "CT",
+  "frm_en": "Outside A",
+  "steps_en": [
+   "Stand at middle of railing",
+   "Aim at intersection of buildings",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-temple-from-outside-a",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "Templo",
+  "frm": "Afuera de A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1769.358398,
+   -1244.817993,
+   30.066071
+  ],
+  "ang": [
+   -28.685102,
+   86.793671
+  ],
+  "land": [
+   -1620.7,
+   1131.5,
+   54.0
+  ],
+  "flight": 6.9,
+  "steps": [
+   "Parate arriba del arbusto",
+   "Apuntá a la punta del ladrillo",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/temple-from-outside-a",
+  "to_en": "Temple",
+  "frm_en": "Outside A",
+  "steps_en": [
+   "Stand at top of bush",
+   "Aim at at tip of brick",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-donut-tunnel-from-outside-a",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "Donut",
+  "frm": "Afuera de A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1934.712646,
+   -862.030884,
+   49.697601
+  ],
+  "ang": [
+   -32.102016,
+   74.690254
+  ],
+  "land": [
+   -1287.6,
+   348.3,
+   89.4
+  ],
+  "flight": 7.8,
+  "steps": [
+   "Parate en el medio de la baranda",
+   "Apuntá al cuadrado negro",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/donut-tunnel-from-outside-a",
+  "to_en": "Donut Tunnel",
+  "frm_en": "Outside A",
+  "steps_en": [
+   "Stand in middle of railing",
+   "Aim at black square",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-b-alley-from-ruins",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "Callejón B",
+  "frm": "Ruinas",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1255.96875,
+   -1479.972534,
+   83.79007
+  ],
+  "ang": [
+   -11.477521,
+   109.402702
+  ],
+  "land": [
+   693.7,
+   538.0,
+   126.1
+  ],
+  "flight": 5.2,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá abajo a la izquierda del rectángulo",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/b-alley-from-ruins",
+  "to_en": "B Alley",
+  "frm_en": "Ruins",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at bottom left corner of rectangle",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-back-alley-from-ruins-corner",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "Back Alley",
+  "frm": "Ruinas",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1255.96875,
+   -1479.96875,
+   82.213989
+  ],
+  "ang": [
+   -5.380337,
+   93.45694
+  ],
+  "land": [
+   1159.8,
+   305.9,
+   122.8
+  ],
+  "flight": 4.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá al medio del adorno",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/back-alley-from-ruins-corner",
+  "to_en": "Back Alley",
+  "frm_en": "Ruins",
+  "steps_en": [
+   "Stand in corner",
+   "Aim in middle of decoration",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-cave-from-ruins",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "Cueva",
+  "frm": "Ruinas",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1255.96875,
+   -1479.96875,
+   83.832565
+  ],
+  "ang": [
+   -11.334518,
+   110.762878
+  ],
+  "land": [
+   521.3,
+   134.2,
+   154.7
+  ],
+  "flight": 4.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá al adorno cuadrado de abajo",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/cave-from-ruins",
+  "to_en": "Cave",
+  "frm_en": "Ruins",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at bottom square decoration",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-b-ramp-from-ct-spawn",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Rampa B",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -66.03125,
+   1771.968262,
+   99.075851
+  ],
+  "ang": [
+   -39.09848,
+   -56.05933
+  ],
+  "land": [
+   1304.7,
+   -357.6,
+   82.3
+  ],
+  "flight": 7.8,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá con las líneas de los ladrillos",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/b-ramp-from-ct-spawn",
+  "to_en": "B Ramp",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Align to lines on bricks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-a-main-from-big-box",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "CT",
+  "to": "A Main",
+  "frm": "Caja grande",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -1599.03125,
+   1187.96875,
+   116.03125
+  ],
+  "ang": [
+   -13.472486,
+   -120.882263
+  ],
+  "land": [
+   -2038.8,
+   179.1,
+   76.1
+  ],
+  "flight": 3.1,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá con el borde de los ladrillos y la parte de arriba de la pared",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/smokes/a-main-from-big-box",
+  "to_en": "A Main",
+  "frm_en": "Big Box",
+  "steps_en": [
+   "Stand in corner",
+   "Align to edge of bricks and top of wall",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "ancient-mid-from-t-mid",
+  "map": "de_ancient",
+  "type": "flash",
+  "side": "T",
+  "to": "Mid",
+  "frm": "Mid T",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -1230.565552,
+   -1044.03125,
+   72.256172
+  ],
+  "ang": [
+   -32.674026,
+   52.203629
+  ],
+  "land": [
+   -700.9,
+   -361.0,
+   352.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en el borde de la pared",
+   "Apuntá a la hoja",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/flashbangs/mid-from-t-mid",
+  "to_en": "Mid",
+  "frm_en": "T Mid",
+  "steps_en": [
+   "Stand at edge of wall",
+   "Aim at leaf",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "ancient-catwalk-from-jaguar",
+  "map": "de_ancient",
+  "type": "flash",
+  "side": "CT",
+  "to": "Catwalk",
+  "frm": "Jaguar",
+  "technique": "both",
+  "movement": "stationary",
+  "pos": [
+   519.96875,
+   -413.03125,
+   249.323669
+  ],
+  "ang": [
+   -15.722957,
+   -139.540604
+  ],
+  "land": [
+   297.0,
+   -598.3,
+   209.1
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la mancha del borde",
+   "Soltá con clic izquierdo y derecho juntos"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/ancient/flashbangs/catwalk-from-jaguar",
+  "to_en": "Catwalk",
+  "frm_en": "Jaguar",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at spot on edge",
+   "Release with left and right click together"
+  ]
+ },
+ {
+  "id": "anubis-top-mid-from-t-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Top Mid",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -299.209717,
+   -1723.965454,
+   65.871246
+  ],
+  "ang": [
+   -8.480664,
+   80.715805
+  ],
+  "land": [
+   -108.5,
+   409.4,
+   2.3
+  ],
+  "flight": 5.7,
+  "steps": [
+   "Parate en el pilar del medio",
+   "Apuntá arriba a la izquierda del palo de madera",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/top-mid-from-t-spawn",
+  "to_en": "Top Mid",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand at middle pillar",
+   "Aim to top left of wood pole",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-ebox-from-t-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "E-box",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -921.329834,
+   -1364.298584,
+   125.891487
+  ],
+  "ang": [
+   -49.574787,
+   80.734619
+  ],
+  "land": [
+   -666.4,
+   370.7,
+   -89.4
+  ],
+  "flight": 8.6,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá al medio de la línea",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/ebox-from-t-spawn",
+  "to_en": "EBox",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at middle of line",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-b-site-from-t-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -921.32959,
+   -1364.302246,
+   121.646515
+  ],
+  "ang": [
+   -12.921065,
+   100.223221
+  ],
+  "land": [
+   -1141.0,
+   773.6,
+   -2.0
+  ],
+  "flight": 5.3,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá abajo a la izquierda del jeroglífico",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/b-site-from-t-spawn",
+  "to_en": "B Site",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim to bottom left of hieroglyph",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-temple-from-t-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Templo",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -921.32959,
+   -1364.302246,
+   121.646515
+  ],
+  "ang": [
+   -45.196629,
+   89.317657
+  ],
+  "land": [
+   -892.3,
+   1073.5,
+   37.0
+  ],
+  "flight": 7.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/temple-from-t-spawn",
+  "to_en": "Temple",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at corner",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-heaven-from-t-upper",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Heaven",
+  "frm": "T arriba",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1493.96875,
+   157.03125,
+   64.03125
+  ],
+  "ang": [
+   -20.23391,
+   101.987717
+  ],
+  "land": [
+   976.6,
+   2162.5,
+   -38.0
+  ],
+  "flight": 6.1,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá entre los adornos redondos",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/heaven-from-t-upper",
+  "to_en": "Heaven",
+  "frm_en": "T Upper",
+  "steps_en": [
+   "Stand in corner",
+   "Aim between round decorations",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-connector-from-t-upper",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Conector",
+  "frm": "T arriba",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1279.321045,
+   571.968872,
+   65.788254
+  ],
+  "ang": [
+   -11.477298,
+   125.519043
+  ],
+  "land": [
+   584.8,
+   1257.1,
+   -85.7
+  ],
+  "flight": 3.0,
+  "steps": [
+   "Parate en el borde de la pared",
+   "Apuntá a la parte de arriba del arco",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/connector-from-t-upper",
+  "to_en": "Connector",
+  "frm_en": "T Upper",
+  "steps_en": [
+   "Stand at edge of wall",
+   "Aim at top of arch",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "anubis-platform-from-water",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Plataforma",
+  "frm": "Agua",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1149.96875,
+   610.03125,
+   -124.833618
+  ],
+  "ang": [
+   -5.441439,
+   117.796814
+  ],
+  "land": [
+   921.9,
+   1611.9,
+   -86.0
+  ],
+  "flight": 4.4,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la grieta de la pared",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/platform-from-water",
+  "to_en": "Platform",
+  "frm_en": "Water",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at crack at wall",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-bridge-from-ct-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Puente",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -368.945068,
+   2360.894531,
+   88.031494
+  ],
+  "ang": [
+   -31.763067,
+   -82.2668
+  ],
+  "land": [
+   -50.1,
+   -93.0,
+   2.2
+  ],
+  "flight": 7.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la punta",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/bridge-from-ct-spawn",
+  "to_en": "Bridge",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at tip",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-b-main-from-ct-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "CT",
+  "to": "B Main",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -368.94458,
+   2360.893311,
+   88.031494
+  ],
+  "ang": [
+   -19.499245,
+   -119.051476
+  ],
+  "land": [
+   -1568.7,
+   286.0,
+   2.0
+  ],
+  "flight": 5.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá arriba a la derecha del ladrillo, donde se juntan las líneas",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/b-main-from-ct-spawn",
+  "to_en": "B Main",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at top right of brick/where lines meet",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-a-main-from-ct-spawn",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "CT",
+  "to": "A Main",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -890.438171,
+   2157.357178,
+   80.056595
+  ],
+  "ang": [
+   -22.649691,
+   -31.568838
+  ],
+  "land": [
+   1349.9,
+   848.8,
+   -150.0
+  ],
+  "flight": 8.5,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá con la punta del ladrillo y el techo del edificio",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/smokes/a-main-from-ct-spawn",
+  "to_en": "A Main",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Align to top right of brick and top of building",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-b-pillar-from-ruins-b",
+  "map": "de_anubis",
+  "type": "molotov",
+  "side": "T",
+  "to": "Pilar B",
+  "frm": "Ruinas",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1016.03125,
+   -49.245483,
+   64.03125
+  ],
+  "ang": [
+   -54.588818,
+   103.195366
+  ],
+  "land": [
+   -1086.8,
+   317.5,
+   -21.0
+  ],
+  "flight": 1.9,
+  "steps": [
+   "Parate en el punto negro",
+   "Apuntá debajo de la mancha oscura",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/anubis/molotovs/b-pillar-from-ruins-b",
+  "to_en": "B Pillar",
+  "frm_en": "Ruins",
+  "steps_en": [
+   "Stand at black dot",
+   "Aim below dark spot",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-heaven-from-silo",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "T",
+  "to": "Heaven",
+  "frm": "Silo",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -19.66156,
+   -1461.646362,
+   17.16766
+  ],
+  "ang": [
+   -21.658056,
+   47.196793
+  ],
+  "land": [
+   972.2,
+   -447.3,
+   -414.0
+  ],
+  "flight": 4.6,
+  "steps": [
+   "Subite al soporte del silo y rompé la ventana",
+   "Apuntá a la izquierda de la punta azul",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/heaven-from-silo",
+  "to_en": "Heaven",
+  "frm_en": "Silo",
+  "steps_en": [
+   "Stand on silo support",
+   "Shoot window",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "nuke-lockers-from-t-spawn-b",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "T",
+  "to": "Lockers",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -940.03125,
+   -864.03125,
+   -304.96875
+  ],
+  "ang": [
+   -37.187107,
+   1.325439
+  ],
+  "land": [
+   1114.8,
+   -806.3,
+   -406.0
+  ],
+  "flight": 7.8,
+  "steps": [
+   "Subite a la caja de la esquina",
+   "Apuntá debajo de la mancha, sobre la línea",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/lockers-from-t-spawn-b",
+  "to_en": "Lockers",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in corner on box",
+   "Aim below dirt at line",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-outside-main-from-t-spawn-b",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "T",
+  "to": "Afuera",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1351.868652,
+   -1049.204346,
+   -352.128754
+  ],
+  "ang": [
+   -44.858379,
+   -19.527067
+  ],
+  "land": [
+   942.6,
+   -1863.0,
+   -414.0
+  ],
+  "flight": 9.1,
+  "steps": [
+   "Parate en la línea de la pared",
+   "Apuntá al borde derecho de la lamparita de la izquierda",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/outside-main-from-t-spawn-b",
+  "to_en": "Outside Main",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand at line in wall",
+   "Aim at right edge of left lightbulb",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-garage-from-outside-t-spawn",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "T",
+  "to": "Garage",
+  "frm": "Afuera de Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -916.570251,
+   -992.030212,
+   -351.462189
+  ],
+  "ang": [
+   -20.379208,
+   -20.680742
+  ],
+  "land": [
+   1581.1,
+   -1934.8,
+   -414.0
+  ],
+  "flight": 6.6,
+  "steps": [
+   "Parate en el borde de la pared",
+   "Alineá con la sombra y el segundo escalón de la escalera",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/garage-from-outside-t-spawn",
+  "to_en": "Garage",
+  "frm_en": "Outside T Spawn",
+  "steps_en": [
+   "Stand at edge of wall",
+   "Align to shadow and 2nd ladder rung",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-ct-red-from-under-silo",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "T",
+  "to": "Cruce (CT Red)",
+  "frm": "Bajo Silo",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -141.270569,
+   -1962.644165,
+   -351.96875
+  ],
+  "ang": [
+   -36.34819,
+   17.487387
+  ],
+  "land": [
+   1162.1,
+   -1529.5,
+   -414.0
+  ],
+  "flight": 4.4,
+  "steps": [
+   "Parate al lado de la línea, sobre el punto",
+   "Apuntá al soporte del silo",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/ct-red-from-under-silo",
+  "to_en": "CT Red",
+  "frm_en": "Under Silo",
+  "steps_en": [
+   "Stand next to line on dot",
+   "Aim at silo support",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "nuke-secret-far-from-t-spawn",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "T",
+  "to": "Secret",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1066.178467,
+   -1142.972168,
+   -351.96875
+  ],
+  "ang": [
+   -44.940491,
+   -24.896788
+  ],
+  "land": [
+   1136.4,
+   -2165.2,
+   -414.0
+  ],
+  "flight": 7.9,
+  "steps": [
+   "Parate en el borde del contenedor",
+   "Apuntá a la esquina de la pared con el cable",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/secret-far-from-t-spawn",
+  "to_en": "Secret Far",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand at edge of container",
+   "Aim at corner of wall/wire",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-top-silo-from-ct-spawn",
+  "map": "de_nuke",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Silo",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1978.005005,
+   -788.419434,
+   -277.632202
+  ],
+  "ang": [
+   -17.616205,
+   -155.530838
+  ],
+  "land": [
+   166.4,
+   -1598.3,
+   -19.6
+  ],
+  "flight": 6.5,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá debajo del conducto, apenas arriba de las rejillas",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/smokes/top-silo-from-ct-spawn",
+  "to_en": "Top Silo",
+  "frm_en": "CT Spawn",
+  "steps_en": [
+   "Stand in corner",
+   "Align below edge of air conduit, just above height of vents",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-hut-roof-from-silo",
+  "map": "de_nuke",
+  "type": "molotov",
+  "side": "T",
+  "to": "Techo de Hut",
+  "frm": "Silo",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -19.397888,
+   -1461.60376,
+   17.179848
+  ],
+  "ang": [
+   -11.131254,
+   29.823231
+  ],
+  "land": [
+   324.0,
+   -987.4,
+   -124.0
+  ],
+  "flight": 2.1,
+  "steps": [
+   "Subite al soporte del silo",
+   "Apuntá a la punta de la línea",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/molotovs/hut-roof-from-silo",
+  "to_en": "Hut Roof",
+  "frm_en": "Silo",
+  "steps_en": [
+   "Stand on silo support",
+   "Aim at top of line",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "nuke-hut-from-heaven",
+  "map": "de_nuke",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Hut",
+  "frm": "Heaven",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1259.911621,
+   -316.030029,
+   -63.96875
+  ],
+  "ang": [
+   -3.407425,
+   -150.253174
+  ],
+  "land": [
+   424.0,
+   -910.2,
+   -392.0
+  ],
+  "flight": 2.1,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la lámpara",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/molotovs/hut-from-heaven",
+  "to_en": "Hut",
+  "frm_en": "Heaven",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at lamp",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "nuke-a-site-from-t-roof-a",
+  "map": "de_nuke",
+  "type": "flash",
+  "side": "T",
+  "to": "Sitio A",
+  "frm": "Techo T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1.293061,
+   -769.648621,
+   -30.726929
+  ],
+  "ang": [
+   3.702358,
+   13.68026
+  ],
+  "land": [
+   521.5,
+   -638.3,
+   -56.9
+  ],
+  "flight": 1.8,
+  "steps": [
+   "Rompé la ventana y parate en el medio",
+   "Alineá con la ventana y la baranda",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/flashbangs/a-site-from-t-roof-a",
+  "to_en": "A Site",
+  "frm_en": "T Roof",
+  "steps_en": [
+   "Shoot window",
+   "Stand in middle",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-hut-from-lobby",
+  "map": "de_nuke",
+  "type": "flash",
+  "side": "T",
+  "to": "Hut",
+  "frm": "Lobby",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   160.03125,
+   -1119.96875,
+   -351.96875
+  ],
+  "ang": [
+   -3.684671,
+   29.145472
+  ],
+  "land": [
+   427.2,
+   -971.0,
+   -387.1
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina de arriba a la izquierda",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/nuke/flashbangs/hut-from-lobby",
+  "to_en": "Hut",
+  "frm_en": "Lobby",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at top left corner",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "cache-ct-from-sun-room",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "T",
+  "to": "CT",
+  "frm": "Sun Room",
+  "technique": "both_jump",
+  "movement": "stationary",
+  "pos": [
+   579.206726,
+   -1449.947266,
+   1676.265625
+  ],
+  "ang": [
+   -2.874133,
+   151.275269
+  ],
+  "land": [
+   -601.5,
+   -842.4,
+   1614.0
+  ],
+  "flight": 4.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina de los ladrillos",
+   "Saltá y soltá con clic izquierdo y derecho juntos al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/smokes/ct-from-sun-room",
+  "to_en": "CT",
+  "frm_en": "Sun Room",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at corner in bricks",
+   "Jump and release with left and right click together at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "cache-forklift-from-outside-squeaky",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "T",
+  "to": "Forklift",
+  "frm": "Afuera de Squeaky",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1315.960083,
+   1587.96875,
+   1768.0
+  ],
+  "ang": [
+   -54.791935,
+   -178.067902
+  ],
+  "land": [
+   7.4,
+   1541.3,
+   1686.0
+  ],
+  "flight": 5.3,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina del techo",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/smokes/forklift-from-outside-squeaky",
+  "to_en": "Forklift",
+  "frm_en": "Outside Squeaky",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at corner of roof",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "cache-back-a-site-from-outside-squeaky",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "T",
+  "to": "Fondo de A",
+  "frm": "Afuera de Squeaky",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1315.96875,
+   1587.962524,
+   1768.0
+  ],
+  "ang": [
+   -48.428482,
+   -174.424484
+  ],
+  "land": [
+   -297.5,
+   1430.5,
+   1686.0
+  ],
+  "flight": 5.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá la esquina de la pared con la baranda de abajo",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/smokes/back-a-site-from-outside-squeaky",
+  "to_en": "Back A Site",
+  "frm_en": "Outside Squeaky",
+  "steps_en": [
+   "Stand in corner",
+   "Align corner of wall with railing below",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "cache-connector-from-t-spawn",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "T",
+  "to": "Conector",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "running",
+  "pos": [
+   2826.988281,
+   16.279705,
+   1672.0
+  ],
+  "ang": [
+   -8.664862,
+   -179.3983
+  ],
+  "land": [
+   -351.7,
+   -21.5,
+   1666.0
+  ],
+  "flight": 5.7,
+  "steps": [
+   "Parate detrás de la tercera marca del piso",
+   "Poné la mira en el punto que marca el clip",
+   "Corré hacia adelante (W) y saltá y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.7,
+  "source": "https://csnades.gg/cache/smokes/connector-from-t-spawn",
+  "to_en": "Connector",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand behind the 3rd hash mark",
+   "Put your crosshair on the spot marked in the clip",
+   "Run forward (W) and jump and release with left click"
+  ]
+ },
+ {
+  "id": "cache-front-b-site-from-sun-room",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "T",
+  "to": "Frente de B",
+  "frm": "Sun Room",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1165.943115,
+   -1435.96875,
+   1676.0
+  ],
+  "ang": [
+   -29.064444,
+   167.172729
+  ],
+  "land": [
+   -7.4,
+   -1102.8,
+   1662.0
+  ],
+  "flight": 4.7,
+  "steps": [
+   "Parate en Sun Room como en el clip",
+   "Poné la mira en el punto que marca el clip",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/smokes/front-b-site-from-sun-room",
+  "to_en": "Front B Site",
+  "frm_en": "Sun Room",
+  "steps_en": [
+   "Stand where the clip shows",
+   "Put your crosshair on the spot marked in the clip",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "cache-garage-from-connector",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Garage",
+  "frm": "Conector",
+  "technique": "left",
+  "movement": "running",
+  "pos": [
+   -484.937134,
+   8.340869,
+   1728.0
+  ],
+  "ang": [
+   5.913411,
+   10.410296
+  ],
+  "land": [
+   965.0,
+   274.7,
+   1614.0
+  ],
+  "flight": 2.5,
+  "steps": [
+   "Parate en Conector",
+   "Apuntá arriba de la baranda, alineado con el portón del garage",
+   "Corré hacia adelante (W) y soltá con clic izquierdo"
+  ],
+  "move_key": "+forward",
+  "move_time": 0.15,
+  "source": "https://csnades.gg/cache/smokes/garage-from-connector",
+  "to_en": "Garage",
+  "frm_en": "Connector",
+  "steps_en": [
+   "Stand in Connector",
+   "Aim at top of railing, aligned with garage door",
+   "Run forward (W) and release with left click"
+  ]
+ },
+ {
+  "id": "cache-headshot-from-sun-room",
+  "map": "de_cache",
+  "type": "molotov",
+  "side": "T",
+  "to": "Headshot",
+  "frm": "Sun Room",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1074.631348,
+   -1449.96875,
+   1712.0
+  ],
+  "ang": [
+   5.453262,
+   172.243515
+  ],
+  "land": [
+   -286.1,
+   -1264.6,
+   1660.0
+  ],
+  "flight": 2.2,
+  "steps": [
+   "Subite a la baranda, a la izquierda de la vía",
+   "Apuntá a la muesca de la caja",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/molotovs/headshot-from-sun-room",
+  "to_en": "Headshot",
+  "frm_en": "Sun Room",
+  "steps_en": [
+   "Stand up on railing, to the left of the track, aligned with the dark spot",
+   "Aim at notch on the box",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "cache-newbox-from-sun-room",
+  "map": "de_cache",
+  "type": "molotov",
+  "side": "T",
+  "to": "Caja nueva",
+  "frm": "Sun Room",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   579.209045,
+   -1449.952026,
+   1676.265625
+  ],
+  "ang": [
+   -11.538868,
+   146.67897
+  ],
+  "land": [
+   152.0,
+   -1292.4,
+   1677.0
+  ],
+  "flight": 1.9,
+  "steps": [
+   "Pegate a la esquina",
+   "Apuntá a la esquina de los ladrillos",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/molotovs/newbox-from-sun-room",
+  "to_en": "Newbox",
+  "frm_en": "Sun Room",
+  "steps_en": [
+   "Stand in corner",
+   "Aim at corner in bricks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "cache-backsite-from-sun-room",
+  "map": "de_cache",
+  "type": "molotov",
+  "side": "T",
+  "to": "Fondo de B",
+  "frm": "Sun Room",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   579.209045,
+   -1449.94043,
+   1676.265625
+  ],
+  "ang": [
+   -39.303154,
+   177.751572
+  ],
+  "land": [
+   40.7,
+   -1428.8,
+   1662.0
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina",
+   "Alineá el borde de la ventana con el techo",
+   "Soltá con clic izquierdo"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/molotovs/backsite-from-sun-room",
+  "to_en": "Backsite",
+  "frm_en": "Sun Room",
+  "steps_en": [
+   "Stand in corner",
+   "Align window edge, down to roof",
+   "Release with left click"
+  ]
+ },
+ {
+  "id": "cache-a-main-from-a-main",
+  "map": "de_cache",
+  "type": "flash",
+  "side": "T",
+  "to": "A Main",
+  "frm": "A Main",
+  "technique": "both",
+  "movement": "stationary",
+  "pos": [
+   791.918762,
+   1125.982544,
+   1764.0
+  ],
+  "ang": [
+   -31.201448,
+   118.884308
+  ],
+  "land": [
+   513.4,
+   1630.8,
+   1781.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Pegate a la esquina y agachate",
+   "Apuntá abajo a la izquierda de la luz",
+   "Soltá con clic izquierdo y derecho juntos"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/cache/flashbangs/a-main-from-a-main",
+  "to_en": "A Main",
+  "frm_en": "A Main",
+  "steps_en": [
+   "Stand in corner, crouch",
+   "Aim at bottom-left corner of light",
+   "Release with left and right click together"
+  ]
+ },
+ {
+  "id": "mirage-window-from-t-spawn-demo",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Ventana",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1422.9,
+   -56.0,
+   -103.97
+  ],
+  "ang": [
+   -19.2,
+   -168.59
+  ],
+  "land": [
+   -1207.7,
+   -586.9,
+   -166.0
+  ],
+  "flight": 7.1,
+  "steps": [
+   "Pegate a la esquina del fondo de Spawn T, contra las dos paredes",
+   "Poné la mira en el punto que marca el clip, sobre el techo de enfrente",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "https://csnades.gg/mirage/smokes/window-from-t-spawn-demo",
+  "to_en": "Window",
+  "frm_en": "T Spawn",
+  "steps_en": [
+   "Stand in the back corner of T Spawn, against both walls",
+   "Put your crosshair on the spot marked in the clip, on the roof ahead",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ }
+]

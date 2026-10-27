@@ -1,0 +1,22 @@
+# Entorno y empaquetado
+.venv/
+build/
+build_new/
+dist/
+dist_new/
+dist_old/
+__pycache__/
+*.pyc
+
+# Ayudante de Steam: se instala con npm install
+helper/node_modules/
+
+# Datos locales (demos, clips, base de datos); viven en %LOCALAPPDATA%\CS2Stats
+*.dem
+*.dem.bz2
+*.dem.zst
+*.webp
+*.db
+
+# Capturas de trabajo (tools/capturas.py)
+capturas/
