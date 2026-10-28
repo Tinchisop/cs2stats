@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -13,8 +14,6 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from cs2stats.importer import import_demo, pending_demos  # noqa: E402
 from cs2stats.store import PARSER_VERSION, Settings, Store  # noqa: E402
-from cs2stats.ui.match import MatchDialog  # noqa: E402
-from cs2stats.ui.theme import STYLE  # noqa: E402
 from cs2stats.ui.window import MainWindow  # noqa: E402
 
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "capturas")
@@ -34,19 +33,23 @@ window.resize(1440, 960)
 window.show()
 
 
+def settle(seconds: float = 1.3) -> None:
+    """Deja terminar las animaciones de entrada antes de sacar la captura."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        app.processEvents()
+        time.sleep(0.01)
+
+
 def shoot() -> None:
     for key in window.pages:
         window.go(key)
-        app.processEvents()
+        settle()
         window.grab().save(str(out / f"{key}.png"))
     if window.view["matches"]:
-        dialog = MatchDialog(window.view["matches"][-1], window, window.view["all_matches"])
-        dialog.setStyleSheet(STYLE)
-        dialog.resize(1340, 1500)
-        dialog.show()
-        app.processEvents()
-        dialog.grab().save(str(out / "partida.png"))
-        dialog.close()
+        window.open_match(window.view["matches"][-1]["id"])
+        settle()
+        window.grab().save(str(out / "partida.png"))
     window.quitting = True
     window.close()
     app.quit()

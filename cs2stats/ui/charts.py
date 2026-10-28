@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from ..i18n import t
+from .motion import Growing
 from .theme import ACCENT, BAD, CT_COLOR, GOOD, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num, icon, rating_color, score_color
 
 
@@ -364,7 +365,7 @@ class SideCompare(QWidget):
                     painter.drawText(QRectF(rect.right() + 6, y, 80, 24), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
 
 
-class RoundStrip(QWidget):
+class RoundStrip(Growing, QWidget):
     """Una ficha por ronda: verde si la ganó tu equipo, roja si no; puntos = tus kills; raya = lado.
 
     Si no entran todas en una fila, cada mitad (y cada alargue) va en su propia fila."""
@@ -419,11 +420,18 @@ class RoundStrip(QWidget):
                 else min(self.CELL, (self.width() - self.GAP * longest - 24) / longest))
         skull = icon("skull", BAD, 12).pixmap(QSize(12, 12))
         painter.setFont(QFont("Segoe UI", 8))
+        drawn = 0
         for line, row in enumerate(rows):
             x, top = 0.0, 22 + line * self.ROW
             for r in row:
                 if single and r["n"] in self.BREAKS:
                     x += 14
+                # Cada ficha aparece apenas después de la anterior, subiendo un poco.
+                local = min(1.0, max(0.0, (self.grow - 0.55 * drawn / len(self.rounds)) / 0.45))
+                drawn += 1
+                painter.save()
+                painter.setOpacity(local)
+                painter.translate(0, (1 - local) * 8)
                 rect = QRectF(x, top, cell, 44)
                 side = QColor(CT_COLOR if r["side"] == "CT" else T_COLOR)
                 fill = QLinearGradient(rect.topLeft(), rect.bottomLeft())
@@ -472,6 +480,7 @@ class RoundStrip(QWidget):
                 if r.get("mvp"):
                     tip += t("\nMVP de la ronda")
                 self._cells.append((rect, tip))
+                painter.restore()
                 x += cell + self.GAP
             if not single and line == 0 and len(rows) > 1:
                 # Flecha hacia la segunda mitad.

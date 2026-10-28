@@ -27,7 +27,8 @@ from ..assets import avatar_path, download_avatar, download_player_avatars, extr
 from ..nades import build_lineups
 from ..recorder import RecorderError, cs2_running, ffmpeg_path, launch_practice, record_lineups
 from .connect import ConnectPage, DemosPage, LoginDialog
-from .match import MatchDialog
+from .match import MatchView
+from .motion import reveal
 from .nades_page import NadesPage
 from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchesPage, ProfilePage, RankPage, UtilityPage,
                     WeaponsPage)
@@ -264,7 +265,8 @@ class MainWindow(QMainWindow):
         content = QVBoxLayout()
         content.setContentsMargins(0, 18, 0, 0)
         content.setSpacing(8)
-        header = QHBoxLayout()
+        self.header_bar = QWidget()  # se oculta en el detalle de partida, que trae su propia cabecera
+        header = QHBoxLayout(self.header_bar)
         header.setContentsMargins(28, 0, 28, 0)
         self.title = label(t("Perfil"), "pageTitle")
         header.addWidget(self.title)
@@ -282,7 +284,9 @@ class MainWindow(QMainWindow):
         self.recent_n.setCurrentIndex(max(0, self.recent_n.findData(self.settings["recent_n"])))
         self.recent_n.currentIndexChanged.connect(self._recent_changed)
         header.addWidget(self.recent_n)
-        content.addLayout(header)
+        content.addWidget(self.header_bar)
+        self.match_view: MatchView | None = None
+        self.current_page = "perfil"
         self.stack = QStackedWidget()
         self.pages = {"perfil": ProfilePage(), "partidas": MatchesPage(), "rango": RankPage(), "mapas": MapsPage(),
                       "latas": NadesPage(), "armas": WeaponsPage(), "utilidad": UtilityPage(), "consejos": AdvicePage(),
@@ -424,8 +428,13 @@ class MainWindow(QMainWindow):
             btn.setChecked(name == key)
             kind = next(k for n, _t, k in self.NAV if n == name)
             btn.setIcon(icon(kind, "#eef0f3" if name == key else MUTED, 18))
+        self.close_match()
+        changed = key != self.current_page
+        self.current_page = key
         self.stack.setCurrentWidget(self.pages[key])
         self.title.setText(self.TITLES[key])
+        if changed:
+            reveal(self.pages[key])
         if key == "demos":
             self.refresh_demos()
         if key == "conectar":
@@ -743,11 +752,26 @@ class MainWindow(QMainWindow):
             self.refresh()
 
     def open_match(self, match_id: int) -> None:
+        """El detalle se abre dentro de la misma ventana, en lugar de la página de donde viniste."""
         match = next((m for m in self.view["all_matches"] if m["id"] == match_id), None)
-        if match:
-            dialog = MatchDialog(match, self, self.view["all_matches"])
-            dialog.setStyleSheet(STYLE)
-            dialog.exec()
+        if not match:
+            return
+        self.close_match()
+        view = MatchView(match, None, self.view["all_matches"], t("Volver a {0}").format(self.TITLES[self.current_page]))
+        view.back.connect(lambda: self.go(self.current_page))
+        self.stack.addWidget(view)
+        self.match_view = view
+        self.header_bar.hide()
+        self.stack.setCurrentWidget(view)
+        view.setFocus()
+        view.animate_in()
+
+    def close_match(self) -> None:
+        if self.match_view is not None:
+            self.stack.removeWidget(self.match_view)
+            self.match_view.deleteLater()
+            self.match_view = None
+        self.header_bar.show()
 
     # Aviso de fin de partida (GSI)
     def start_gsi(self) -> None:

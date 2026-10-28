@@ -861,6 +861,9 @@ EN = {
     "{0} mató {1} veces a {2} y murió {3} veces\nDaño: {4} hecho, {5} recibido":
         "{0} killed {2} {1} times and died {3} times\nDamage: {4} dealt, {5} taken",
     "Jugador:": "Player:",
+    "Volver": "Back",
+    "Volver a {0}": "Back to {0}",
+    "También con Esc o el botón Atrás del mouse": "Also with Esc or the mouse Back button",
     "¿Cómo se calcula?": "How is it calculated?",
     "Tu impacto": "Your impact",
     "Impacto de {0}": "{0}'s impact",

@@ -308,6 +308,17 @@ QFrame#tile {{ background: #1c2027; border: 1px solid #2a2f37; border-radius: 10
 QFrame#tileGood {{ background: #18212c; border: 1px solid #36608f; border-radius: 10px; }}
 QFrame#tileBad {{ background: #2a181c; border: 1px solid #7a3340; border-radius: 10px; }}
 QFrame#tileUtil {{ background: #231e17; border: 1px solid #5f4424; border-radius: 10px; }}
+QFrame#rowAlly:hover {{ background: rgba(90,169,255,34); border-color: #2f4a6e; }}
+QFrame#rowRival:hover {{ background: rgba(240,162,75,32); border-color: #5a4329; }}
+QFrame#rowMe:hover {{ background: rgba(255,79,123,48); }}
+QFrame#rowBest:hover {{ background: rgba(63,207,142,32); }}
+QFrame#tile:hover {{ border-color: #4a515c; background: #20252d; }}
+QFrame#tileGood:hover {{ border-color: {CT_COLOR}; }}
+QFrame#tileBad:hover {{ border-color: {BAD}; }}
+QFrame#tileUtil:hover {{ border-color: {T_COLOR}; }}
+QPushButton#backButton {{ background: rgba(255,255,255,10); border: 1px solid rgba(255,255,255,26); border-radius: 8px;
+                          padding: 6px 14px; color: #dfe2e7; font-size: 13px; font-weight: 700; }}
+QPushButton#backButton:hover {{ background: rgba(255,79,123,40); border-color: {ACCENT}; color: #ffffff; }}
 QLabel#matchMap {{ font-family: 'Segoe UI Variable Display'; font-size: 44px; font-weight: 800; }}
 QLabel#matchScore {{ font-family: 'Segoe UI Variable Display'; font-size: 26px; font-weight: 800; }}
 QLabel#cardPlayer {{ font-family: 'Segoe UI Variable Display'; font-size: 22px; font-weight: 700; }}
@@ -322,9 +333,9 @@ QPushButton#tabButton {{ background: rgba(255,255,255,8); border: 1px solid rgba
 QPushButton#tabButton:hover {{ color: {TEXT}; background: rgba(255,255,255,16); }}
 QPushButton#tabButton:checked {{ color: #ff6b8f; border-color: rgba(255,79,123,90); border-bottom: 3px solid {ACCENT};
                                  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255,79,123,10), stop:1 rgba(255,79,123,55)); }}
-QDialog#matchDialog QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(28,32,40,232), stop:1 rgba(20,22,28,240));
+QWidget#matchView QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(28,32,40,232), stop:1 rgba(20,22,28,240));
                                    border: 1px solid rgba(255,79,123,95); border-radius: 16px; }}
-QDialog#matchDialog QFrame#playerCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(40,34,30,225), stop:0.6 rgba(26,28,34,225), stop:1 rgba(48,24,32,225));
+QWidget#matchView QFrame#playerCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(40,34,30,225), stop:0.6 rgba(26,28,34,225), stop:1 rgba(48,24,32,225));
                                          border: 1px solid #6a5238; border-radius: 18px; }}
 QFrame#tableHeadLeft {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1d5fc0, stop:1 #2a74d6);
                         border-top-left-radius: 8px; border-bottom-left-radius: 8px; }}

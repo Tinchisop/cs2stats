@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import random
 
-from PySide6.QtCore import QPointF, QSize, Qt
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen, QPixmap, QRadialGradient
-from PySide6.QtWidgets import QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QKeySequence, QLinearGradient, QPainter, QPen, QPixmap, QRadialGradient, QShortcut
+from PySide6.QtWidgets import QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ..assets import map_image
 from ..i18n import t
@@ -14,6 +14,7 @@ from ..metrics import SOURCE_NAMES, aim_summary, map_label
 from .charts import RoundStrip
 from .match_parts import cell, color_legend, divider, glow, header_row, missing_note, player_row, team_rows, tone_color
 from .match_tabs import DuelsTab, ImpactTab, overview_tab, page, utility_tab, your_match_tab
+from .motion import reveal, reveal_children
 from .pages import card, result_text, scroll_page, short_date
 from .theme import (ACCENT, BAD, BG, CT_COLOR, GOOD, MID, MUTED, T_COLOR, fmt_num, fmt_pct, icon, label, panel,
                     rating_color)
@@ -70,12 +71,16 @@ def stat_tile(title: str, value: str, kind: str, tone: str) -> QFrame:
     return frame
 
 
-class MatchDialog(QDialog):
-    def __init__(self, m: dict, parent=None, history: list[dict] | None = None):
+class MatchView(QWidget):
+    """Detalle de una partida como página de la ventana principal (no una ventana aparte)."""
+
+    back = Signal()
+
+    def __init__(self, m: dict, parent=None, history: list[dict] | None = None, back_text: str = ""):
         super().__init__(parent)
-        self.setObjectName("matchDialog")
-        self.setWindowTitle(f"{map_label(m['map'])} · {short_date(m['played_at'])}")
-        self.resize(1340, 940)
+        self.setObjectName("matchView")
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # para que Esc vuelva atrás
+        self.title = f"{map_label(m['map'])} · {short_date(m['played_at'])}"
         path = map_image(m["map"])
         self.backdrop_image = QPixmap(str(path)) if path else QPixmap()
         self.backdrop: QPixmap | None = None
@@ -83,7 +88,9 @@ class MatchDialog(QDialog):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         area, body = scroll_page()
-        body.setContentsMargins(24, 20, 24, 24)
+        body.setContentsMargins(24, 14, 24, 24)
+        # Si la ventana es más angosta que el detalle, aparece la barra horizontal en vez de cortar las tablas.
+        area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         area.viewport().setAutoFillBackground(False)
         outer.addWidget(area)
         self.area = area
@@ -91,8 +98,22 @@ class MatchDialog(QDialog):
         players = m["scoreboard"]
         ratings = [p.get("rating") or 0 for p in players]
         self.best = players[ratings.index(max(ratings))]["steamid"] if players else None
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, activated=self.back.emit,
+                  context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
 
-        body.addLayout(self._header(m, s))
+        top = QHBoxLayout()
+        back = QPushButton(f"←  {back_text or t('Volver')}")
+        back.setObjectName("backButton")
+        back.setCursor(Qt.CursorShape.PointingHandCursor)
+        back.setToolTip(t("También con Esc o el botón Atrás del mouse"))
+        back.clicked.connect(self.back.emit)
+        top.addWidget(back)
+        top.addStretch(1)
+        body.addLayout(top)
+        self.header = QWidget()
+        self.header.setLayout(self._header(m, s))
+        self.header.layout().setContentsMargins(0, 0, 0, 0)
+        body.addWidget(self.header)
         bar = QHBoxLayout()
         bar.setSpacing(4)
         group = QButtonGroup(self)
@@ -117,14 +138,25 @@ class MatchDialog(QDialog):
         body.addLayout(bar)
         body.addLayout(holder)
         body.addStretch(1)
-        # Las tarjetas principales de cada pestaña llevan un brillo suave.
-        for widget in self.pages.values():
-            for frame in widget.findChildren(QFrame, options=Qt.FindChildOption.FindDirectChildrenOnly):
-                if frame.objectName() in ("card", "identityCard", "rowMe"):
-                    glow(frame, ACCENT, 30, 60)
-        self.show_tab("you")
+        # Las tarjetas principales de cada pestaña llevan un brillo suave (y son las que entran animadas).
+        self.cards: dict[str, list[QFrame]] = {}
+        for key, widget in self.pages.items():
+            self.cards[key] = [frame for frame in widget.findChildren(QFrame, options=Qt.FindChildOption.FindDirectChildrenOnly)
+                               if frame.objectName() in ("card", "identityCard", "rowMe")]
+            for frame in self.cards[key]:
+                glow(frame, ACCENT, 30, 60)
+        self.current = ""
+        self.show_tab("you", animate=False)
 
-    def show_tab(self, key: str) -> None:
+    def animate_in(self) -> None:
+        """Al abrir la partida: la cabecera baja suave y después entran las tarjetas una por una."""
+        reveal(self.header)
+        reveal_children(self.cards[self.current], then=lambda w: glow(w, ACCENT, 30, 60))
+
+    def show_tab(self, key: str, animate: bool = True) -> None:
+        if key == self.current:
+            return
+        self.current = key
         for name, widget in self.pages.items():
             widget.setVisible(name == key)
             self.buttons[name].setChecked(name == key)
@@ -133,6 +165,20 @@ class MatchDialog(QDialog):
             else:
                 self.buttons[name].setGraphicsEffect(None)
         self.area.verticalScrollBar().setValue(0)
+        if animate:
+            reveal_children(self.cards[key], then=lambda w: glow(w, ACCENT, 30, 60))
+
+    def mousePressEvent(self, event):  # noqa: N802
+        if event.button() == Qt.MouseButton.BackButton:
+            self.back.emit()
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):  # noqa: N802
+        if event.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Back):
+            self.back.emit()
+            return
+        super().keyPressEvent(event)
 
     def resizeEvent(self, event):  # noqa: N802
         self.backdrop = None
@@ -200,12 +246,6 @@ class MatchDialog(QDialog):
             painter.drawEllipse(QPointF(x, y), size * 0.6, size * 0.6)
         painter.end()
         return canvas
-
-    def showEvent(self, event):  # noqa: N802
-        # La página no tiene barra horizontal: la ventana no se deja achicar más que su contenido (ya con el estilo puesto).
-        super().showEvent(event)
-        widest = max(widget.minimumSizeHint().width() for widget in self.pages.values())
-        self.setMinimumWidth(max(widest + 48, self.area.widget().minimumSizeHint().width()) + 16)
 
     def _header(self, m: dict, s: dict) -> QHBoxLayout:
         row = QHBoxLayout()

@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from ..i18n import t
+from .motion import Growing
 from .theme import BAD, CT_COLOR, GOOD, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num
 
 
@@ -18,7 +19,7 @@ def signed(value: float | None, decimals: int = 2) -> str:
     return ("+" if value >= 0 else "") + fmt_num(value, decimals)
 
 
-class Gauge(QWidget):
+class Gauge(Growing, QWidget):
     """Medidor en arco: el valor de esta partida y una marca con tu promedio de las últimas partidas."""
 
     SPAN = 10.0  # el arco va de -10 a +10
@@ -40,7 +41,7 @@ class Gauge(QWidget):
         painter.drawArc(rect, int(220 * 16), int(-260 * 16))
         if self.value is not None:
             painter.setPen(QPen(QColor(self.color), 9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            painter.drawArc(rect, int(220 * 16), int((self._angle(self.value) - 220) * 16))
+            painter.drawArc(rect, int(220 * 16), int((self._angle(self.value) - 220) * self.grow * 16))
         if self.average is not None:
             angle = math.radians(self._angle(self.average))
             center = rect.center()
@@ -56,10 +57,11 @@ class Gauge(QWidget):
         painter.drawText(QRectF(0, 88, self.width(), 16), Qt.AlignmentFlag.AlignHCenter, self.title.upper())
         painter.setPen(QColor(self.color if self.value is not None else SUBTLE))
         painter.setFont(QFont("Segoe UI Variable Display", 24, QFont.Weight.Bold))
-        painter.drawText(QRectF(0, 104, self.width(), 40), Qt.AlignmentFlag.AlignHCenter, signed(self.value))
+        shown = self.value * self.grow if self.value is not None else None  # el número cuenta hasta el valor
+        painter.drawText(QRectF(0, 104, self.width(), 40), Qt.AlignmentFlag.AlignHCenter, signed(shown))
 
 
-class DivergingBars(QWidget):
+class DivergingBars(Growing, QWidget):
     """Barras horizontales que salen del cero: a la derecha lo que sumó, a la izquierda lo que restó."""
 
     ROW = 30
@@ -88,7 +90,7 @@ class DivergingBars(QWidget):
             painter.setPen(QColor("#cfd3da"))
             painter.setFont(QFont("Segoe UI", 10))
             painter.drawText(QRectF(0, y, name_w - 12, self.ROW - 8), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, name)
-            length = width / 2 * abs(value) / top
+            length = width / 2 * abs(value) / top * min(1.0, max(0.0, self.grow * 1.4 - index * 0.06))
             bar = QRectF(mid, y + 3, length, self.ROW - 14) if value >= 0 else QRectF(mid - length, y + 3, length, self.ROW - 14)
             color = QColor(GOOD if value >= 0 else BAD)
             color.setAlpha(190)
@@ -108,7 +110,8 @@ class DivergingBars(QWidget):
         QToolTip.hideText()
 
 
-class RoundImpact(QWidget):
+class RoundImpact(Growing, QWidget):
+    grow_ms = 1100
     """Impacto de cada ronda: barra verde hacia arriba si sumaste, roja hacia abajo si restaste; raya = lado."""
 
     def __init__(self, rounds: list[dict], parent=None):
@@ -140,7 +143,9 @@ class RoundImpact(QWidget):
         bar_w = max(6.0, min(34.0, slot * 0.62))
         for index, r in enumerate(self.rounds):
             x = axis_w + index * slot + (slot - bar_w) / 2
-            length = abs(r["value"]) / top * height / 2
+            # Las barras crecen una detrás de otra, de la primera ronda a la última.
+            local = min(1.0, max(0.0, (self.grow - 0.5 * index / len(self.rounds)) / 0.5))
+            length = abs(r["value"]) / top * height / 2 * local
             rect = QRectF(x, zero - length, bar_w, length) if r["value"] >= 0 else QRectF(x, zero, bar_w, length)
             color = QColor(GOOD if r["value"] >= 0 else BAD)
             color.setAlpha(200)
@@ -163,7 +168,7 @@ class RoundImpact(QWidget):
         QToolTip.hideText()
 
 
-class ShareBar(QWidget):
+class ShareBar(Growing, QWidget):
     """Barra repartida en tramos (cuántas granadas de cada tipo tiró el equipo)."""
 
     def __init__(self, parts: list[tuple[str, int, str]], parent=None, text: bool = True):
@@ -179,6 +184,7 @@ class ShareBar(QWidget):
         if not total:
             return
         x, gap = 0.0, 4.0
+        painter.setClipRect(QRectF(0, 0, self.width() * self.grow, self.height()))  # se descubre de izquierda a derecha
         width = self.width() - gap * (len(self.parts) - 1)
         painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         for name, count, color in self.parts:
@@ -195,7 +201,7 @@ class ShareBar(QWidget):
             x += w + gap
 
 
-class MarkerBar(QWidget):
+class MarkerBar(Growing, QWidget):
     """Barra con tu valor y una marca con el promedio de tu equipo."""
 
     def __init__(self, share: float | None, marker: float | None, color: str, parent=None):
@@ -218,7 +224,7 @@ class MarkerBar(QWidget):
             fill.setColorAt(0, dark)
             fill.setColorAt(1, QColor(self.color))
             painter.setBrush(fill)
-            painter.drawRoundedRect(QRectF(0, 4, max(6.0, track.width() * self.share), 6), 3, 3)
+            painter.drawRoundedRect(QRectF(0, 4, max(6.0, track.width() * self.share * self.grow), 6), 3, 3)
         if self.marker is not None:
             painter.setBrush(QColor(TEXT))
             painter.drawRect(QRectF(track.width() * self.marker - 1, 0, 2, 14))
