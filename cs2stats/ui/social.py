@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFrame, QGridLayout, Q
                                QSizePolicy, QVBoxLayout, QWidget)
 
 from ..assets import player_avatar
-from ..friends import FACE_OFF, friends, score
+from ..friends import FACE_OFF, combine, friends, score, synergy, team_roles
 from ..i18n import t
 from ..metrics import map_label
 from ..progress import GOAL_KINDS, achievements, goal_progress, goal_value, premier_forecast
@@ -115,6 +115,8 @@ class FriendsPage(Page):
         body.addLayout(chips)
         friend = next(f for f in found if str(f["steamid"]) == self.selected)
         body.addWidget(self._duel(friend, view))
+        body.addWidget(self._synergy(friend, view))
+        body.addWidget(self._roles(found, view))
         box, layout = card(t("Partidas juntos"), t("Clic para ver el detalle"))
         for m in reversed(friend["matches"][-10:]):
             layout.addWidget(self._match_row(m, friend))
@@ -196,6 +198,86 @@ class FriendsPage(Page):
         top.addLayout(them_col, 1)
         layout.addLayout(top)
         layout.addWidget(FaceOff(friend))
+        return box
+
+    def _synergy(self, friend: dict, view: dict) -> QFrame:
+        """Sinergia: cuánto ganás juntos y separados, y cuánto te ayuda en la ronda."""
+        data = synergy(friend, view["all_matches"])
+        box, layout = card(t("Sinergia con {0}").format(friend["name"]), t("Partidas con demo"))
+        delta = (data["with"] - data["without"]) if data["without"] is not None else None
+        if delta is None:
+            headline = t("Con {0} ganás el {1} de las partidas.").format(friend["name"], fmt_pct(data["with"]))
+        elif delta >= 0.03:
+            headline = t("Con {0} ganás el {1} de las partidas, {2} puntos más que cuando no está.").format(
+                friend["name"], fmt_pct(data["with"]), f"{delta * 100:.0f}")
+        elif delta <= -0.03:
+            headline = t("Con {0} ganás el {1} de las partidas, {2} puntos menos que cuando no está.").format(
+                friend["name"], fmt_pct(data["with"]), f"{-delta * 100:.0f}")
+        else:
+            headline = t("Con {0} ganás el {1} de las partidas, casi lo mismo que cuando no está.").format(friend["name"], fmt_pct(data["with"]))
+        title = label(headline, "insightTitle", wrap=True)
+        if delta is not None and abs(delta) >= 0.03:
+            title.setStyleSheet(f"color: {GOOD if delta > 0 else BAD};")
+        layout.addWidget(title)
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        tiles = [
+            (t("JUNTOS"), fmt_pct(data["with"]), t("{0} partidas").format(data["games"])),
+            (t("SEPARADOS"), fmt_pct(data["without"]), t("{0} partidas").format(data["apart"])),
+            (t("FLASHES EFECTIVAS"), fmt_num(data["flashes_pr"], 2), t("rivales cegados por ronda")),
+            (t("ASISTENCIAS DE FLASH"), fmt_num((data["flash_assists"] or 0) * 24, 1), t("por partida de 24 rondas")),
+            (t("KILLS DE CAMBIO"), fmt_num(data["trade_pr"], 2), t("por ronda")),
+            (t("TU RATING JUNTOS"), fmt_num(data["rating_with_you"], 2), t("en las partidas juntos")),
+        ]
+        for index, (head, value, note) in enumerate(tiles):
+            tile = panel("challenge")
+            col = QVBoxLayout(tile)
+            col.setContentsMargins(12, 8, 12, 10)
+            col.setSpacing(2)
+            col.addWidget(label(head, "cardTitle"))
+            col.addWidget(label(value, "midValue"))
+            col.addWidget(label(note, "smallMuted"))
+            grid.addWidget(tile, index // 3, index % 3)
+        for col in range(3):
+            grid.setColumnStretch(col, 1)
+        layout.addLayout(grid)
+        return box
+
+    def _roles(self, found: list[dict], view: dict) -> QFrame:
+        """Roles del grupo: quién ayuda más a abrir los sitios y quién queda más veces último vivo."""
+        mine = combine([p["stats"] for m in view["all_matches"] for p in m.get("scoreboard") or [] if p.get("me") and p.get("stats")])
+        roles = team_roles(found, mine, view["name"] or t("Vos"))
+        box, layout = card(t("Roles del grupo"), t("Vos y los compañeros con los que más jugás"))
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        columns = (
+            ("entry", t("ENTRY ASSISTANT"), t("Abre los sitios con flashes que ciegan y cambia las kills de los que entran."),
+             lambda s: t("{0} flashes efectivas y {1} cambios por ronda").format(fmt_num(s.get("flashes_pr"), 2),
+                                                                                 fmt_num(s.get("trade_pr"), 2)), "entry_score"),
+            ("lurk", t("LURK / SAVER"), t("Queda último vivo y sobrevive las rondas: juega lejos del grupo o guarda el arma."),
+             lambda s: t("último vivo en el {0} de las rondas · sobrevive el {1}").format(fmt_pct(s.get("last_alive_pr")),
+                                                                                         fmt_pct(s.get("survival"))), "lurk_score"),
+        )
+        for key, head, help_text, describe, score_key in columns:
+            col = QVBoxLayout()
+            col.setSpacing(6)
+            col.addWidget(label(head, "cardTitle"))
+            col.addWidget(label(help_text, "smallMuted", wrap=True))
+            people = roles[key][:5]
+            best = people[0][score_key] if people and people[0][score_key] else 1
+            for rank, person in enumerate(people):
+                line = QHBoxLayout()
+                line.setSpacing(8)
+                name = label(f"{rank + 1}. {person['name']}" + (t(" (vos)") if person["me"] else ""), "body")
+                if rank == 0:
+                    name.setStyleSheet(f"color: {ACCENT}; font-weight: 700;")
+                line.addWidget(name, 1)
+                line.addWidget(label(describe(person["stats"]), "smallMuted"))
+                col.addLayout(line)
+                col.addWidget(TierProgress(person[score_key] / best if best else 0, ACCENT if rank == 0 else CT_COLOR))
+            col.addStretch(1)
+            row.addLayout(col, 1)
+        layout.addLayout(row)
         return box
 
     def _match_row(self, m: dict, friend: dict) -> QWidget:

@@ -18,8 +18,12 @@ Everything runs on your PC with official Valve tools. It never reads or touches 
 * **Tips** written from your own numbers, with how confident each one is.
 * **Lineups:** the best known smokes, molotovs and flashes for Mirage, Dust II, Inferno, Ancient, Anubis, Nuke and Cache, each one tested in CS2. Every lineup has a clip recorded in game in three parts (where to stand, where to aim, how it lands), step by step instructions and how many times it was thrown in your matches. Click the clip to watch it full screen.
 * **Steam message after every match:** your secondary account sends you a chat message, like a friend, with your best moments (multi-kills, clutches, ADR records).
-* **Heat map** of where you kill and where you die on each map, with the zones that repeat the most.
-* **You and your friends:** head to head against the teammates you play with the most, in the same matches.
+* **2D replay of every match:** all 10 players on the map, round by round, with a timeline, speed control, grenades, the bomb, shots and kills, to review executes, rotations and retakes.
+* **Automatic plays:** the app finds your aces, 4Ks, 3Ks and won clutches, and also your mistakes (dying without firing, flashes that blinded 2 or more teammates). Each one plays as a short clip of the replay or saves as an MP4 or GIF, without opening the game or downloading the demo again.
+* **Heat map** of where you kill and where you die on each map, with the zones that repeat the most. **Early deaths** shows where you die in the first 30 seconds, per side (for example: "On Mirage as T, 35% of your early deaths happen at Top Mid").
+* **You and your friends:** head to head against the teammates you play with the most, in the same matches, plus your **synergy** with each one: how often you win together and apart, their effective flashes and trade kills. It also shows who in the group is the Entry Assistant and who is the Lurk / Saver.
+* **Pre-match assistant:** add your teammates and opponents (your Steam party is detected automatically, or paste profiles, names or the `status` output) and the app suggests which maps to pick and ban, and flags dangerous opponents, AWPers and entry fraggers. With a FACEIT room and a free FACEIT API key it adds all 10 players' FACEIT numbers.
+* **Training:** 3 new challenges every Monday built from your weak spots (trade kills on your map, ADR over consecutive matches, matches without blinding teammates…) and free CS2 Workshop maps with a concrete routine for each one (Aim Botz, Recoil Master, Yprac, prefires).
 * **Achievements and goals:** 20 medals (ace, clutches, streaks, Premier colors…), your own goals with progress bars and a Premier forecast for your next 10 matches.
 * **Map music:** each map's song, taken from your CS2 files, plays when you open a match or tap a map, plus a map radio with volume control.
 * **Spanish and English.** Pick the language at the bottom of the sidebar.
@@ -45,11 +49,11 @@ For FACEIT, download the demo from the match room and the app imports it from yo
 * Only official sources: Game State Integration (a text file in the CS2 `cfg` folder), the Match History API, Valve's replay servers and the CS2 Game Coordinator through the secondary account.
 * It never opens, reads or modifies the game process or its memory.
 * Lineup clips are recorded with CS2 in practice mode (`-insecure`, your own server) and the Windows window capture. To play online again, close CS2 and open it normally.
-* Keys and tokens are stored encrypted on your PC with Windows DPAPI. Nothing is sent to other services.
+* Keys and tokens are stored encrypted on your PC with Windows DPAPI. Nothing is sent to other services. The only exception is optional: if you add a FACEIT key, the pre-match assistant uses it to read the room you give it.
 
 ## Data
 
-Everything is stored in `%LOCALAPPDATA%\CS2Stats`: `historial.db` (matches, rounds and weapons), `ajustes.json` and `clips\` (clips you record yourself).
+Everything is stored in `%LOCALAPPDATA%\CS2Stats`: `historial.db` (matches, rounds, weapons and the compressed 2D replays), `ajustes.json` and `clips\` (clips you record yourself).
 
 ## Development
 

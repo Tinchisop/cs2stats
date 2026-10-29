@@ -18,8 +18,12 @@ Todo corre en tu PC con herramientas oficiales de Valve. Nunca lee ni toca la me
 * **Consejos** armados con tus números, con qué tan confiable es cada uno.
 * **Latas:** las smokes, molotovs y flashes más conocidas de Mirage, Dust II, Inferno, Ancient, Anubis, Nuke y Cache, cada una probada en CS2, con el nombre del call (Ventana, Jungla, Cabezinha, CT, Triple, Caja de fuego, L...). Cada lata tiene un clip grabado en el juego en tres partes (dónde pararte, adónde apuntar y cómo cae), los pasos y cuántas veces se tiró en tus partidas. Con un clic se ve en pantalla completa.
 * **Mensaje de Steam al terminar cada partida:** tu cuenta secundaria te escribe por el chat, como un amigo, con lo mejor de tu partida (multikills, clutches, récords de ADR).
-* **Mapa de calor** de dónde matás y dónde morís en cada mapa, con las zonas que más se repiten.
-* **Vos y tus amigos:** cara a cara con los compañeros con los que más jugás, en las mismas partidas.
+* **Repetición 2D de cada partida:** los 10 jugadores sobre el mapa, ronda por ronda, con barra de tiempo, velocidad, granadas, bomba, disparos y kills, para revisar ejecuciones, rotaciones y retakes.
+* **Jugadas automáticas:** la app busca tus ases, 4K, 3K y clutches ganados, y también tus errores (morir sin disparar, flashes que cegaron a 2 o más compañeros). Cada una se mira como un clip corto de la repetición o se guarda como MP4 o GIF, sin abrir el juego ni bajar la demo de nuevo.
+* **Mapa de calor** de dónde matás y dónde morís en cada mapa, con las zonas que más se repiten. Con **muertes tempranas** ves dónde caés en los primeros 30 segundos, por lado (por ejemplo: "En Mirage como T el 35 % de tus muertes tempranas son en Top Mid").
+* **Vos y tus amigos:** cara a cara con los compañeros con los que más jugás, en las mismas partidas, y la **sinergia** con cada uno: cuánto ganás juntos y separados, sus flashes efectivas y kills de cambio. Además, quién del grupo es el Entry Assistant y quién el Lurk / Saver.
+* **Asistente pre-partida:** cargá a tus compañeros y a los rivales (tu grupo de Steam se detecta solo, o pegás perfiles, nombres o la salida de `status`) y la app sugiere qué mapas pickear y banear, y marca a los rivales peligrosos, AWPers y entry fraggers. Con una sala de FACEIT y una clave gratis de la API de FACEIT suma los números de FACEIT de los 10.
+* **Entrenamiento:** 3 retos nuevos cada lunes armados con tus puntos flojos (kills de cambio en tu mapa, ADR en partidas seguidas, partidas sin cegar compañeros…) y mapas gratis del Workshop de CS2 con una rutina concreta para cada cosa (Aim Botz, Recoil Master, Yprac, prefires).
 * **Logros y metas:** 20 medallas (as, clutches, rachas, colores de Premier…), metas propias con barra de progreso y un pronóstico de Premier para tus próximas 10 partidas.
 * **Música del mapa:** la canción de cada mapa, sacada de tus archivos de CS2, suena al abrir una partida o tocar un mapa, y hay una radio de mapas con control de volumen.
 * **Español e inglés.** El idioma se elige abajo en la barra lateral.
@@ -45,11 +49,11 @@ Para FACEIT, bajá la demo desde la sala del partido y la app la importa desde D
 * Solo fuentes oficiales: Game State Integration (un archivo de texto en la carpeta `cfg` de CS2), la Match History API, los servidores de repeticiones de Valve y el Game Coordinator de CS2 con la cuenta secundaria.
 * Nunca abre, lee ni modifica el proceso del juego ni su memoria.
 * Los clips de latas se graban con CS2 en modo práctica (`-insecure`, servidor tuyo) y la captura de ventanas de Windows. Para volver a jugar online, cerrás CS2 y lo abrís normal.
-* Las claves se guardan cifradas en tu PC con DPAPI de Windows. Nada se manda a otros servicios.
+* Las claves se guardan cifradas en tu PC con DPAPI de Windows. Nada se manda a otros servicios. La única excepción es opcional: si cargás una clave de FACEIT, el asistente pre-partida la usa para leer la sala que le pases.
 
 ## Dónde se guardan los datos
 
-En `%LOCALAPPDATA%\CS2Stats`: `historial.db` (partidas, rondas y armas), `ajustes.json` y `clips\` (los clips que grabes vos).
+En `%LOCALAPPDATA%\CS2Stats`: `historial.db` (partidas, rondas, armas y las repeticiones 2D comprimidas), `ajustes.json` y `clips\` (los clips que grabes vos).
 
 ## Para desarrollar
 

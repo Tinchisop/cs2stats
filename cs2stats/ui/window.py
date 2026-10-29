@@ -22,12 +22,14 @@ from ..steamapi import SteamError
 from ..store import PARSER_VERSION, Settings, Store, data_dir
 from ..i18n import LANGUAGES, language, t
 from ..resumen import match_message
-from ..sync import reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
+from ..sync import build_replay, reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
 from ..assets import (MAP_MUSIC, avatar_path, download_avatar, download_player_avatars, extract_game_assets,
-                      extract_map_music, map_music)
+                      extract_map_music, extract_overviews, map_music)
+from ..prematch import LobbyError, collect, detect_party
 from ..nades import MapGrid
 from ..nades import build_lineups
 from ..recorder import RecorderError, cs2_running, ffmpeg_path, launch_practice, record_lineups
+from .clips_page import ClipsPage
 from .connect import ConnectPage, DemosPage, LoginDialog
 from .match import MatchView
 from .hud import CoachBot
@@ -35,10 +37,12 @@ from .motion import cascade, reveal
 from .nades_page import NadesPage
 from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchesPage, ProfilePage, RankPage, UtilityPage,
                     WeaponsPage)
+from .prematch_page import PrematchPage
 from .radio import MusicButton, MusicPanel
 from .social import AchievementsPage, FriendsPage
 from .sound import MapMusic
 from .theme import ACCENT, BAD, GOOD, MUTED, STYLE, app_icon, fmt_num, icon, label, panel
+from .training_page import TrainingPage
 
 RUN_KEY = t(r"Software\Microsoft\Windows\CurrentVersion\Run")
 RUN_NAME = t("CS2 Stats")
@@ -119,7 +123,7 @@ class TaskWorker(QObject):
         try:
             result = self.task(self.message.emit)
             self.finished.emit(result, "")
-        except (SteamError, HelperError, RecorderError) as error:
+        except (SteamError, HelperError, RecorderError, LobbyError) as error:
             log.warning("Tarea: %s", error)
             self.finished.emit(None, str(error))
         except BaseException as error:
@@ -213,15 +217,18 @@ def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
 
 class MainWindow(QMainWindow):
     NAV = [(t("ESTADÍSTICAS"), None, None), ("perfil", t("Perfil"), "profile"), ("partidas", t("Partidas"), "list"),
-           ("rango", t("Tu rango"), "rank"), ("mapas", t("Mapas"), "map"), ("latas", t("Latas"), "grenade"),
+           ("jugadas", t("Jugadas"), "film"), ("rango", t("Tu rango"), "rank"), ("mapas", t("Mapas"), "map"), ("latas", t("Latas"), "grenade"),
            ("armas", t("Armas"), "target"),
-           ("utilidad", t("Utilidad y plata"), "bolt"), ("consejos", t("Consejos"), "bulb"), ("amigos", t("Amigos"), "friends"),
+           ("utilidad", t("Utilidad y plata"), "bolt"), ("consejos", t("Consejos"), "bulb"),
+           ("entrenamiento", t("Entrenamiento"), "dumbbell"), ("amigos", t("Amigos"), "friends"),
+           ("prepartida", t("Pre-partida"), "duel"),
            ("logros", t("Logros y metas"), "medal"), ("historial", t("Historial"), "history"),
            (t("CUENTA"), None, None), ("conectar", t("Conectar Steam"), "link"), ("demos", t("Demos y aviso"), "import"),
            ("ayuda", t("Cómo usar"), "help")]
     TITLES = {"perfil": t("Perfil"), "partidas": t("Partidas"), "rango": t("Comparación con tu rango"), "mapas": t("Mapas"),
               "latas": t("Latas"),
               "armas": t("Armas"), "utilidad": t("Utilidad y plata"), "consejos": t("Consejos para mejorar"),
+              "jugadas": t("Tus jugadas"), "entrenamiento": t("Entrenamiento"), "prepartida": t("Asistente pre-partida"),
               "historial": t("Historial completo"), "amigos": t("Vos y tus amigos"), "logros": t("Logros y metas"), "conectar": t("Conectar Steam"), "demos": t("Demos y aviso de fin de partida"),
               "ayuda": t("Cómo usar CS2 Stats")}
 
@@ -241,6 +248,13 @@ class MainWindow(QMainWindow):
         self.assets_runner.done.connect(lambda _r, _e: self.refresh())
         self.clips_runner = TaskRunner("clips", self)
         self.clips_runner.done.connect(self._clips_done)
+        self.replay_runner = TaskRunner("repeticion", self)
+        self.replay_runner.done.connect(self._replay_done)
+        self.replay_for: int | None = None
+        self.lobby_runner = TaskRunner("pre-partida", self)
+        self.lobby_runner.done.connect(self._lobby_done)
+        self.lobby_task = ""
+        self.replay_runner.message.connect(self._replay_message)
         self.stop_recording = False
         self.quitting = False
         self.game_dir = cs2_game_dir()
@@ -303,7 +317,8 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.pages = {"perfil": ProfilePage(), "partidas": MatchesPage(), "rango": RankPage(), "mapas": MapsPage(),
                       "latas": NadesPage(), "armas": WeaponsPage(), "utilidad": UtilityPage(), "consejos": AdvicePage(),
-                      "amigos": FriendsPage(), "logros": AchievementsPage(),
+                      "amigos": FriendsPage(), "logros": AchievementsPage(), "jugadas": ClipsPage(),
+                      "entrenamiento": TrainingPage(), "prepartida": PrematchPage(),
                       "historial": HistoryPage(), "conectar": ConnectPage(), "demos": DemosPage(), "ayuda": HelpPage()}
         self.pages["logros"].set_goals(self.settings.values.get("goals", []))
         self.pages["logros"].goals_changed.connect(self._goals_changed)
@@ -318,6 +333,12 @@ class MainWindow(QMainWindow):
         self.pages["partidas"].delete_requested.connect(self.delete_match)
         self.pages["partidas"].play_map.connect(self.toggle_music)
         self.pages["mapas"].play_map.connect(self.toggle_music)
+        self.pages["jugadas"].store = self.store
+        lobby: PrematchPage = self.pages["prepartida"]
+        lobby.set_key(self.settings.secret("faceit_key"))
+        lobby.detect_requested.connect(self.detect_lobby)
+        lobby.analyze_requested.connect(self.analyze_lobby)
+        self.lobby_runner.message.connect(lambda text: lobby.set_busy(True, text))
         nades: NadesPage = self.pages["latas"]
         nades.loader = lambda: build_lineups(self.store.nade_data())
         nades.record_requested.connect(self.start_recording)
@@ -443,6 +464,8 @@ class MainWindow(QMainWindow):
         layout.addSpacing(8)
         status = QFrame()
         status.setObjectName("sideCard")
+        self.status_card = status
+        self.compact_nav = False
         status_layout = QVBoxLayout(status)
         status_layout.setContentsMargins(12, 10, 12, 10)
         status_layout.setSpacing(4)
@@ -530,9 +553,16 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, obj, event):  # noqa: N802
         if obj is getattr(self, "side", None) and event.type() == QEvent.Type.Resize:
-            self._place_indicator(False)
-            # En ventanas bajas el robot se esconde para que entre todo el menú.
-            self.coach.setVisible(event.size().height() >= 820)
+            # En ventanas bajas el robot y el estado se esconden y los botones se achican para que entre todo el menú.
+            height = event.size().height()
+            self.coach.setVisible(height >= 900)
+            self.status_card.setVisible(height >= 800)
+            compact = height < 900
+            if compact != self.compact_nav:
+                self.compact_nav = compact
+                for btn in self.nav.values():
+                    btn.setStyleSheet("QPushButton#navButton { padding: 4px 14px; }" if compact else "")
+            QTimer.singleShot(0, lambda: self._place_indicator(False))
         return super().eventFilter(obj, event)
 
     def _place_indicator(self, animate: bool = True) -> None:
@@ -788,6 +818,7 @@ class MainWindow(QMainWindow):
         def task(_say):
             extract_game_assets()
             extract_map_music()
+            extract_overviews()
             if old_avatar:
                 download_avatar(steamid, key)
             download_player_avatars(others, key)
@@ -916,8 +947,12 @@ class MainWindow(QMainWindow):
         if not match:
             return
         self.close_match()
-        view = MatchView(match, None, self.view["all_matches"], t("Volver a {0}").format(self.TITLES[self.current_page]))
+        index = self.store.replay_index()
+        view = MatchView(match, None, self.view["all_matches"], t("Volver a {0}").format(self.TITLES[self.current_page]),
+                         replay_loader=lambda key: (self.store.replay(key), index.get(key, {}).get("status", "")),
+                         grid=self.view.get("grids", {}).get(match["map"]))
         view.back.connect(lambda: self.go(self.current_page))
+        view.replay_requested.connect(self.start_replay)
         view.music_toggled.connect(self._match_music)
         self.stack.addWidget(view)
         self.match_view = view
@@ -928,6 +963,59 @@ class MainWindow(QMainWindow):
         if self.settings["map_music"] and not self.radio_on:
             self.music.play(match["map"], map_music(match["map"]))
         view.set_music(self.music.playing)
+
+    # Repetición 2D a pedido (partidas importadas antes de que se guardaran las posiciones)
+    def start_replay(self, match_id: int) -> None:
+        match = next((m for m in self.view["all_matches"] if m["id"] == match_id), None)
+        if not match:
+            return
+        if not self.replay_runner.start(lambda say: build_replay(self.store, self.settings, match, say)):
+            QMessageBox.information(self, t("CS2 Stats"), t("Ya se está armando otra repetición. Esperá a que termine."))
+            return
+        self.replay_for = match_id
+
+    def _replay_message(self, text: str) -> None:
+        if self.match_view is not None and self.match_view.match_id == self.replay_for:
+            self.match_view.replay_tab.set_busy(text)
+
+    def _replay_done(self, ready, error: str) -> None:
+        match_id, self.replay_for = self.replay_for, None
+        view = self.match_view
+        if view is not None and view.match_id == match_id:
+            if ready:
+                view.replay_tab.reload()
+            else:
+                view.replay_tab.set_busy(error or t("No se pudo armar: la demo ya no está disponible."))
+        if ready:
+            self.refresh()
+
+    # Pre-partida
+    def detect_lobby(self) -> None:
+        page: PrematchPage = self.pages["prepartida"]
+        key, me = self.settings.secret("api_key"), self.settings["steamid"]
+        self.lobby_task = "detect"
+        if self.lobby_runner.start(lambda _say: detect_party(key, me)):
+            page.set_busy(True, t("Buscando tu grupo en Steam"))
+
+    def analyze_lobby(self, mates: str, rivals: str, room: str, faceit_key: str) -> None:
+        page: PrematchPage = self.pages["prepartida"]
+        if faceit_key != self.settings.secret("faceit_key"):
+            self.settings.set("faceit_key", faceit_key)
+        key, me, matches = self.settings.secret("api_key"), self.settings["steamid"], self.view["all_matches"]
+        self.lobby_task = "analyze"
+        if self.lobby_runner.start(lambda say: collect(key, faceit_key, me, mates, rivals, room, matches, say)):
+            page.set_busy(True, t("Analizando el lobby"))
+
+    def _lobby_done(self, result, error: str) -> None:
+        page: PrematchPage = self.pages["prepartida"]
+        if error:
+            page.show_error(error)
+        elif self.lobby_task == "detect":
+            page.set_mates([f"https://steamcommunity.com/profiles/{p.steamid}" for p in result])
+            page.set_busy(False, t("Encontré {0} amigos en tu lobby.").format(len(result)) if result
+                          else t("No hay amigos tuyos en tu lobby ahora."))
+        else:
+            page.show_collected(result)
 
     def _match_music(self, on: bool) -> None:
         self.settings.set("map_music", on)
@@ -1039,6 +1127,8 @@ class MainWindow(QMainWindow):
         self.stop_recording = True
         self.clips_runner.stop()
         self.assets_runner.stop()
+        self.replay_runner.stop()
+        self.lobby_runner.stop()
         if self.gsi_server:
             self.gsi_server.stop()
         self.music.shutdown()

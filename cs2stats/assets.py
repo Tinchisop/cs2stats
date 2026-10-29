@@ -208,6 +208,49 @@ def extract_map_music(force: bool = False) -> bool:
     return True
 
 
+def extract_overviews(force: bool = False) -> bool:
+    """Dónde están los sitios de bomba y los spawns de cada mapa, de resource/overviews/*.txt (para la repetición 2D)."""
+    target = assets_dir() / "overviews.json"
+    if target.exists() and not force:
+        return True
+    game = cs2_game_dir()
+    if not game or not (game / "pak01_dir.vpk").exists():
+        return False
+    import json
+    import vpk
+    pak = vpk.open(str(game / "pak01_dir.vpk"))
+    markers = {}
+    for name in MAPS + ["de_italy", "de_office"]:
+        path = f"resource/overviews/{name}.txt"
+        try:
+            text = pak.get_file(path).read().decode("utf-8", "replace")
+        except (KeyError, OSError, ValueError):
+            continue
+        values = dict(re.findall(r'"(\w+)"\s+"([-\d.]+)"', text))
+        try:
+            x0, y0, scale = float(values["pos_x"]), float(values["pos_y"]), float(values["scale"])
+        except (KeyError, ValueError):
+            continue
+        spots = {}
+        for key, title in (("bombA", "A"), ("bombB", "B"), ("CTSpawn", "CT"), ("TSpawn", "T")):
+            if f"{key}_x" in values and f"{key}_y" in values:
+                # Las marcas vienen como fracción de la imagen del radar (1024 px).
+                spots[title] = [round(x0 + float(values[f"{key}_x"]) * 1024 * scale),
+                                round(y0 - float(values[f"{key}_y"]) * 1024 * scale)]
+        markers[name] = spots
+    target.write_text(json.dumps(markers), encoding="utf-8")
+    return True
+
+
+def map_markers(map_name: str) -> dict[str, list[int]]:
+    """Sitios A y B y spawns del mapa en coordenadas del juego ({} si todavía no se sacaron del juego)."""
+    import json
+    try:
+        return json.loads((assets_dir() / "overviews.json").read_text(encoding="utf-8")).get(map_name, {})
+    except (OSError, ValueError):
+        return {}
+
+
 def map_icon(map_name: str) -> Path | None:
     path = assets_dir() / "mapas" / f"{map_name}_icono.svg"
     return path if path.exists() else None

@@ -27,7 +27,7 @@ NOT_A_GUN = {"knife", "knife_t", "world", "", "hegrenade", "inferno", "molotov",
              "flashbang", "smokegrenade", "decoy", "c4", "planted_c4"}
 EVENTS = ["begin_new_match", "cs_pre_restart", "round_freeze_end", "round_end", "buytime_ended", "player_death",
           "player_hurt", "player_blind", "weapon_fire", "rank_update", "smokegrenade_detonate", "flashbang_detonate",
-          "hegrenade_detonate", "inferno_startburn", "bomb_planted", "bomb_defused"]
+          "hegrenade_detonate", "inferno_startburn", "bomb_planted", "bomb_defused", "bomb_exploded"]
 # Latas: tiro (weapon_fire) y dónde explotó (evento de detonación del mismo jugador y tipo).
 NADE_THROWS = {"weapon_smokegrenade": "smoke", "weapon_flashbang": "flash", "weapon_hegrenade": "he",
                "weapon_molotov": "molotov", "weapon_incgrenade": "molotov"}
@@ -397,6 +397,9 @@ def parse_demo(path: str, steamid: int) -> dict:
             "stats": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in stats.items()},
         })
     scoreboard.sort(key=lambda r: (not r["ally"], -(r["rating"] or 0)))
+    grenades = _grenades(parser, events, windows, round_teams, names, steamid)
+    from .replay import build as build_replay
+    replay = build_replay(parser, events, windows, round_teams, names, steamid, rounds, grenades, map_name)
 
     return {
         "match_key": match_key, "map": map_name, "server": server, "source": source,
@@ -404,7 +407,7 @@ def parse_demo(path: str, steamid: int) -> dict:
         "score_us": won, "score_them": lost,
         "result": "W" if won > lost else "L" if lost > won else "T",
         "rank": rank, "rounds": rounds, "weapons": weapons, "scoreboard": scoreboard,
-        "grenades": _grenades(parser, events, windows, round_teams, names, steamid),
+        "grenades": grenades, "replay": replay,
         "grid": _position_grid(parser, windows),
         "aim": _aim(parser, events, windows),
         "detail": _detail(parser, events, windows, round_teams, round_alive),

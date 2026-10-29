@@ -35,6 +35,10 @@ def combine(stats: list[dict]) -> dict:
         "hs": weighted("hs"), "opening_win": total("opening_kills") / openings if openings else None,
         "first_team_death": weighted("first_team_death"), "util_adr": weighted("util_adr"),
         "clutch_rate": total("clutches_won") / clutches if clutches else None,
+        # Juego en equipo (por ronda): flashes que cegaron rivales, asistencias de flash, cambios y quedar último vivo.
+        "flashes_pr": total("enemies_flashed") / rounds, "flash_assists_pr": total("flash_assists") / rounds,
+        "trade_pr": total("trade_kills") / rounds, "last_alive_pr": clutches / rounds,
+        "survival": 1 - deaths / rounds, "opening_pr": openings / rounds,
     }
 
 
@@ -81,3 +85,31 @@ def score(friend: dict) -> tuple[int, int]:
         else:
             theirs += 1
     return mine, theirs
+
+
+def synergy(friend: dict, matches: list[dict]) -> dict:
+    """Cuánto ganás con tu amigo y sin tu amigo, y cuánto te ayuda en la ronda (lo que hizo en las partidas juntos)."""
+    together = {m["id"] for m in friend["matches"]}
+    apart = [m for m in matches if m["id"] not in together and m.get("scoreboard")]
+    theirs = friend["theirs"]
+    return {
+        "with": friend["win_rate"], "games": friend["games"],
+        "without": sum(1 for m in apart if m["result"] == "W") / len(apart) if apart else None, "apart": len(apart),
+        "flashes_pr": theirs.get("flashes_pr"), "flash_assists": theirs.get("flash_assists_pr"),
+        "trade_pr": theirs.get("trade_pr"), "rating_with_you": friend["mine"].get("rating"),
+    }
+
+
+def team_roles(found: list[dict], me: dict, my_name: str) -> dict[str, list[dict]]:
+    """Quién abre los sitios con utilidad y cambios (Entry Assistant) y quién queda más veces último vivo (Lurk / Saver).
+
+    found: la lista de friends(); me: tus números combinados de todas tus partidas con demo."""
+    people = [{"name": my_name, "me": True, "stats": me}] + [{"name": f["name"], "me": False, "stats": f["theirs"],
+                                                               "steamid": f["steamid"]} for f in found[:8]]
+    people = [p for p in people if p["stats"].get("rounds")]
+    for person in people:
+        s = person["stats"]
+        person["entry_score"] = (s.get("flashes_pr") or 0) + 3 * (s.get("flash_assists_pr") or 0) + 2 * (s.get("trade_pr") or 0)
+        person["lurk_score"] = 2 * (s.get("last_alive_pr") or 0) + 0.5 * (s.get("survival") or 0)
+    return {"entry": sorted(people, key=lambda p: -p["entry_score"]),
+            "lurk": sorted(people, key=lambda p: -p["lurk_score"])}

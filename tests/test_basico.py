@@ -262,5 +262,129 @@ class LatasTest(unittest.TestCase):
         self.assertEqual((found.count, found.mine), (1, 1))
 
 
+def fake_replay_round(n, kills=(), shots=None, blinds=(), length=90.0, end=80.0):
+    teams = {str(ME): "T", "2": "T", "3": "T", "11": "CT", "12": "CT", "13": "CT"}
+    return {"n": n, "winner": "T", "reason": "", "end": end, "length": length, "teams": teams,
+            "tracks": {p: [0, 0, 0, 100] * 4 for p in teams}, "kills": list(kills), "shots": shots or {},
+            "blinds": list(blinds), "nades": [], "bomb": []}
+
+
+class JugadasTest(unittest.TestCase):
+    def test_multikill_clutch_y_errores(self):
+        from cs2stats.replay import find_moments
+        me = str(ME)
+        data = {"me": me, "rounds": [
+            # 3 kills tuyas, pero la primera lejos de las otras: el clip no pasa de 25 s.
+            fake_replay_round(1, kills=[[5.0, me, "11", "ak47", True], [40.0, me, "12", "ak47", False],
+                                        [44.0, me, "13", "ak47", False]]),
+            # Clutch: mueren tus 2 compañeros y ganás.
+            fake_replay_round(2, kills=[[10.0, "11", "2", "awp", False], [20.0, "12", "3", "awp", False],
+                                        [30.0, me, "11", "ak47", True]]),
+            # Moriste sin disparar y tu flash cegó a 2 compañeros.
+            fake_replay_round(3, kills=[[15.0, "11", me, "awp", True]], shots={me: [20.0]},
+                              blinds=[[8.0, me, "2", 2.0], [8.05, me, "3", 1.5], [8.0, me, "12", 3.0]]),
+        ]}
+        rounds = [fake_round(1, kills=3, won=True), fake_round(2, kills=1, won=True, clutch_vs=1, clutch_won=True),
+                  fake_round(3, died=True)]
+        rounds[2]["death_time"] = 15.0
+        kinds = {(m["kind"], m["round"]): m for m in find_moments(data, rounds)}
+        self.assertIn(("3k", 1), kinds)
+        self.assertLessEqual(kinds[("3k", 1)]["to"] - kinds[("3k", 1)]["from"], 25)
+        self.assertIn(("clutch", 2), kinds)
+        self.assertEqual(kinds[("clutch", 2)]["at"], 20.0)
+        self.assertIn(("no_shots", 3), kinds)
+        self.assertEqual(kinds[("team_flash", 3)]["count"], 2)
+
+    def test_repeticion_comprimida(self):
+        from cs2stats.replay import decode, encode
+        data = {"rounds": [fake_replay_round(1)], "moments": []}
+        self.assertEqual(decode(encode(data)), data)
+
+
+def fake_match(played_at, map_name="de_mirage", result="W", **stats):
+    s = summarize([fake_round(i, won=result == "W") for i in range(1, 21)])
+    s.update(stats)
+    return {"id": hash(played_at) % 10000, "played_at": played_at, "map": map_name, "result": result, "s": s,
+            "scoreboard": [], "rounds": []}
+
+
+class EntrenamientoTest(unittest.TestCase):
+    def test_retos_de_la_semana(self):
+        from datetime import datetime
+        from cs2stats.training import week_start, weekly_challenges
+        now = datetime(2026, 10, 29, 12, 0)
+        self.assertEqual(week_start(now), datetime(2026, 10, 26))
+        before = [fake_match(f"2026-10-{d:02d}T20:00:00", adr=60, team_flashed=4, flashes=10, trade_kills=5) for d in range(10, 25)]
+        week = [fake_match(f"2026-10-{d}T20:00:00", adr=90, team_flashed=0, flashes=5) for d in (26, 27, 28)]
+        challenges, start = weekly_challenges(before + week, now)
+        self.assertEqual(len(challenges), 3)
+        self.assertEqual(len({c.key for c in challenges}), 3)
+        keys = {c.key: c for c in challenges}
+        # Con ADR bajo y muchas flashes a tu equipo, esos retos van primero; esta semana ya los cumpliste.
+        self.assertIn("adr", keys)
+        self.assertIn("clean_flash", keys)
+        self.assertTrue(keys["adr"].done and keys["clean_flash"].done)
+        # Los retos no cambian con las partidas de la misma semana.
+        again, _ = weekly_challenges(before + week[:1], now)
+        self.assertEqual([c.key for c in again], [c.key for c in challenges])
+
+    def test_mapas_del_workshop(self):
+        from cs2stats.training import WORKOUTS, recommend
+        self.assertTrue(all(w.workshop_id > 3_000_000_000 for w in WORKOUTS.values()))
+        picks = recommend([], [])
+        self.assertTrue(picks and all(not weak for _w, _r, weak in picks))
+
+
+class PrePartidaTest(unittest.TestCase):
+    def test_lee_lo_que_pegas(self):
+        from cs2stats.prematch import parse_people
+        text = ("https://steamcommunity.com/profiles/76561198000000001\nhttps://steamcommunity.com/id/alguien\n"
+                "#  3 0:12 40 0 active 786432 'Pepe Malo'\nfulano\nhttps://www.faceit.com/es/cs2/room/"
+                "1-11111111-2222-3333-4444-555555555555")
+        people, vanities, room = parse_people(text, {"pepe malo": (76561198000000002, "Pepe Malo")})
+        self.assertEqual([p.steamid for p in people], [76561198000000001, 76561198000000002, 0])
+        self.assertEqual(people[2].name, "fulano")
+        self.assertEqual(vanities, ["alguien"])
+        self.assertEqual(room, "1-11111111-2222-3333-4444-555555555555")
+
+    def test_sugiere_mapas_y_rivales(self):
+        from cs2stats.prematch import analyze
+        rival = 76561198000000005
+        matches = []
+        for _ in range(6):
+            # El rival jugó en contra tuyo en Mirage y te ganó siempre, matando con AWP.
+            board = [{"steamid": ME, "me": True, "ally": True, "stats": summarize([fake_round(1)])},
+                     {"steamid": rival, "me": False, "ally": False, "name": "Rival",
+                      "stats": summarize([fake_round(1, kills=2, died=False, opening="kill")])}]
+            matches.append({"map": "de_mirage", "result": "L", "scoreboard": board,
+                            "detail": {"kills": [[1, str(rival), str(ME), "awp", True]] * 3}})
+        games = [{"map": "Inferno", "result": "W"}] * 10 + [{"map": "Mirage", "result": "L"}] * 10
+        report = analyze(ME, [], [{"name": "Rival", "steamid": rival}], matches, games)
+        verdicts = {r["map"]: r["verdict"] for r in report["maps"]}
+        self.assertEqual(verdicts["inferno"], "pick")
+        self.assertEqual(verdicts["mirage"], "ban")
+        self.assertIn("awp", report["rivals"][0]["tags"])
+
+
+class SinergiaTest(unittest.TestCase):
+    def test_con_y_sin_tu_amigo(self):
+        from cs2stats.friends import friends, synergy, team_roles
+        friend = 76561198000000007
+        stats = summarize([fake_round(i, enemies_flashed=2, trade_kills=1) for i in range(1, 11)])
+        matches = []
+        for i in range(6):
+            together = i < 4
+            board = [{"steamid": ME, "me": True, "ally": True, "stats": stats}]
+            if together:
+                board.append({"steamid": friend, "me": False, "ally": True, "name": "Amigo", "stats": stats})
+            matches.append({"id": i, "result": "W" if together else "L", "scoreboard": board})
+        found = friends(matches)
+        data = synergy(found[0], matches)
+        self.assertEqual((data["with"], data["without"], data["apart"]), (1.0, 0.0, 2))
+        self.assertAlmostEqual(data["flashes_pr"], 2.0)
+        roles = team_roles(found, found[0]["mine"], "Yo")
+        self.assertEqual(len(roles["entry"]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

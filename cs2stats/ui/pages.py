@@ -24,6 +24,7 @@ from .visual import Avatar, MapCard, PremierBadge, WeaponRow
 from .theme import (ACCENT, ACCENT_SOFT, BAD, CT_COLOR, GOOD, MID, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num,
                     fmt_pct, icon, label, panel, rating_color, score_color)
 
+EARLY_DEATH = 30   # segundos: una muerte antes de esto cuenta como muerte temprana
 MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
 
@@ -920,6 +921,7 @@ class MapsPage(Page):
         self.playing = ""
         self.heat_map = ""
         self.heat_mode = "deaths"
+        self.heat_side = ""
         self.view = None
 
     def set_playing(self, map_name: str) -> None:
@@ -992,14 +994,19 @@ class MapsPage(Page):
         body.addStretch(1)
 
     def _heat_card(self, view: dict) -> QFrame:
-        """Mapa de calor: dónde matás y dónde morís, con las zonas que más se repiten."""
+        """Mapa de calor: dónde matás, dónde morís y dónde morís en los primeros 30 segundos, con las zonas que más se repiten."""
         spots: dict[str, dict[str, list]] = {}
         for m in view["matches"]:
-            entry = spots.setdefault(m["map"], {"kills": [], "deaths": []})
+            entry = spots.setdefault(m["map"], {"kills": [], "deaths": [], "early": [], "rounds": 0})
             for r in m["rounds"]:
+                if self.heat_side and r["side"] != self.heat_side:
+                    continue
+                entry["rounds"] += 1
                 entry["kills"].extend(r.get("kill_spots") or [])
                 if r.get("death_spot"):
                     entry["deaths"].append(r["death_spot"])
+                    if r.get("died_live") and r.get("death_time") is not None and r["death_time"] <= EARLY_DEATH:
+                        entry["early"].append(r["death_spot"])
         maps = sorted(spots, key=lambda k: -(len(spots[k]["kills"]) + len(spots[k]["deaths"])))
         if self.heat_map not in maps:
             self.heat_map = maps[0] if maps else ""
@@ -1017,36 +1024,61 @@ class MapsPage(Page):
             group.addButton(seg)
             top.addWidget(seg)
         top.addStretch(1)
+        layout.addLayout(top)
+        second = QHBoxLayout()
+        second.setSpacing(6)
         modes = QButtonGroup(box)
-        for key, title in (("kills", t("Dónde matás")), ("deaths", t("Dónde morís")), ("both", t("Las dos"))):
+        for key, title in (("kills", t("Dónde matás")), ("deaths", t("Dónde morís")),
+                           ("early", t("Muertes tempranas")), ("both", t("Las dos"))):
             seg = QPushButton(title)
             seg.setObjectName("segment")
             seg.setCheckable(True)
             seg.setChecked(key == self.heat_mode)
             seg.setCursor(Qt.CursorShape.PointingHandCursor)
+            if key == "early":
+                seg.setToolTip(t("Dónde morís en los primeros 30 segundos de la ronda"))
             seg.clicked.connect(lambda _=False, k=key: self._heat_pick(mode=k))
             modes.addButton(seg)
-            top.addWidget(seg)
-        layout.addLayout(top)
-        data = spots.get(self.heat_map, {"kills": [], "deaths": []})
+            second.addWidget(seg)
+        second.addStretch(1)
+        sides = QButtonGroup(box)
+        for key, title in (("", t("Los dos lados")), ("T", "T"), ("CT", "CT")):
+            seg = QPushButton(title)
+            seg.setObjectName("segment")
+            seg.setCheckable(True)
+            seg.setChecked(key == self.heat_side)
+            seg.setCursor(Qt.CursorShape.PointingHandCursor)
+            seg.clicked.connect(lambda _=False, k=key: self._heat_pick(side=k or "-"))
+            sides.addButton(seg)
+            second.addWidget(seg)
+        layout.addLayout(second)
+        data = spots.get(self.heat_map, {"kills": [], "deaths": [], "early": [], "rounds": 0})
         grid = view.get("grids", {}).get(self.heat_map)
+        early = self.heat_mode == "early"
+        if early:
+            layout.addWidget(self._early_note(grid, data))
         row = QHBoxLayout()
         row.setSpacing(16)
         heat = HeatMap()
-        heat.set_data(grid, data["kills"], data["deaths"], self.heat_mode)
+        if early:
+            heat.set_data(grid, [], data["early"], "deaths")
+        else:
+            heat.set_data(grid, data["kills"], data["deaths"], self.heat_mode)
         row.addWidget(heat, 3)
         side = QVBoxLayout()
         side.setSpacing(6)
-        for title, points, color in ((t("DONDE MÁS MATÁS"), data["kills"], ACCENT), (t("DONDE MÁS MORÍS"), data["deaths"], BAD)):
+        lists = ([(t("DONDE MÁS MORÍS AL ARRANCAR"), data["early"], BAD)] if early else
+                 [(t("DONDE MÁS MATÁS"), data["kills"], ACCENT), (t("DONDE MÁS MORÍS"), data["deaths"], BAD)])
+        for title, points, color in lists:
             side.addWidget(label(title, "cardTitle"))
-            zones = hot_zones(grid, points)
+            zones = hot_zones(grid, points, 6 if early else 4)
             if not zones:
                 side.addWidget(label("—", "smallMuted"))
             top_count = zones[0][1] if zones else 1
             for name, count in zones:
                 line = QHBoxLayout()
                 line.addWidget(label(name, "body"), 1)
-                value = label(str(count), "body")
+                value = label(fmt_pct(count / len(points)) if early else str(count), "body")
                 value.setStyleSheet(f"color: {color}; font-weight: 800;")
                 line.addWidget(value)
                 side.addLayout(line)
@@ -1054,16 +1086,54 @@ class MapsPage(Page):
                 bar.set_score(count / top_count * 100)
                 side.addWidget(bar)
             side.addSpacing(12)
-        side.addWidget(label(t("{0} kills y {1} muertes con posición").format(len(data["kills"]), len(data["deaths"])),
-                             "smallMuted", wrap=True))
+        if early:
+            side.addWidget(label(t("{0} muertes en los primeros 30 segundos, en {1} rondas").format(
+                len(data["early"]), data["rounds"]), "smallMuted", wrap=True))
+        else:
+            side.addWidget(label(t("{0} kills y {1} muertes con posición").format(len(data["kills"]), len(data["deaths"])),
+                                 "smallMuted", wrap=True))
         side.addStretch(1)
         row.addLayout(side, 1)
         layout.addLayout(row)
         return box
 
-    def _heat_pick(self, map_name: str = "", mode: str = "") -> None:
+    def _early_note(self, grid, data: dict) -> QFrame:
+        """La frase que resume las muertes tempranas: en qué zona caés más y qué tan seguido."""
+        frame = panel("badCard")
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(14, 10, 14, 10)
+        row.setSpacing(12)
+        picture = QLabel()
+        picture.setPixmap(icon("skull", BAD, 26).pixmap(QSize(26, 26)))
+        row.addWidget(picture, 0, Qt.AlignmentFlag.AlignTop)
+        text = QVBoxLayout()
+        text.setSpacing(3)
+        points, rounds = data["early"], data["rounds"]
+        zones = hot_zones(grid, points, 1)
+        side = {"T": t("como T"), "CT": t("como CT")}.get(self.heat_side, "")
+        where = f"{map_label(self.heat_map)} {side}".strip()
+        if zones and len(points) >= 3:
+            zone, count = zones[0]
+            title = t("En {0} el {1} de tus muertes en los primeros 30 segundos son en {2}.").format(
+                where, fmt_pct(count / len(points)), zone)
+        elif points:
+            title = t("En {0} todavía hay pocas muertes tempranas para sacar conclusiones.").format(where)
+        else:
+            title = t("En {0} no moriste nunca en los primeros 30 segundos. Bien ahí.").format(where)
+        text.addWidget(label(title, "insightTitle", wrap=True))
+        if rounds:
+            text.addWidget(label(t("Morís antes de los 30 segundos en el {0} de tus rondas ({1} de {2}). Si siempre es en el "
+                                   "mismo lugar, probá llegar más tarde, con una flash o con un compañero cerca para "
+                                   "cambiar la kill.").format(fmt_pct(len(points) / rounds), len(points), rounds),
+                                 "smallMuted", wrap=True))
+        row.addLayout(text, 1)
+        return frame
+
+    def _heat_pick(self, map_name: str = "", mode: str = "", side: str = "") -> None:
         self.heat_map = map_name or self.heat_map
         self.heat_mode = mode or self.heat_mode
+        if side:
+            self.heat_side = "" if side == "-" else side
         if self.view:
             self.update_view(self.view)
 

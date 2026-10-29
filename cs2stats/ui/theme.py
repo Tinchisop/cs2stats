@@ -236,6 +236,27 @@ def icon(kind: str, color: str = MUTED, size: int = 20) -> QIcon:
     elif kind == "stop":
         painter.setBrush(QColor(color))
         painter.drawRoundedRect(QRectF(6.5, 6.5, 11, 11), 2, 2)
+    elif kind == "pause":
+        painter.setBrush(QColor(color))
+        painter.drawRoundedRect(QRectF(7, 5.5, 3.6, 13), 1.2, 1.2)
+        painter.drawRoundedRect(QRectF(13.4, 5.5, 3.6, 13), 1.2, 1.2)
+    elif kind == "film":
+        painter.drawRoundedRect(QRectF(3.5, 5.5, 17, 13), 2, 2)
+        for x in (6.5, 10.5, 14.5, 18):
+            painter.drawLine(QPointF(x - 1, 5.5), QPointF(x - 1, 7.5))
+            painter.drawLine(QPointF(x - 1, 16.5), QPointF(x - 1, 18.5))
+        painter.setBrush(QColor(color))
+        path = QPainterPath(QPointF(10.5, 9.5))
+        path.lineTo(15, 12)
+        path.lineTo(10.5, 14.5)
+        path.closeSubpath()
+        painter.drawPath(path)
+    elif kind == "dumbbell":
+        painter.drawLine(QPointF(7, 12), QPointF(17, 12))
+        painter.drawRoundedRect(QRectF(3.5, 7, 3.5, 10), 1.2, 1.2)
+        painter.drawRoundedRect(QRectF(17, 7, 3.5, 10), 1.2, 1.2)
+        painter.drawLine(QPointF(2, 10), QPointF(2, 14))
+        painter.drawLine(QPointF(22, 10), QPointF(22, 14))
     elif kind in ("next", "prev"):
         painter.setBrush(QColor(color))
         flip = kind == "prev"
@@ -505,6 +526,9 @@ QCheckBox::indicator {{ width: 17px; height: 17px; border-radius: 4px; border: 1
 QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
 QLineEdit {{ background: {BG}; border: 1px solid #30343c; border-radius: 8px; padding: 7px 10px; selection-background-color: #1d4a40; }}
 QLineEdit:focus {{ border-color: {ACCENT}; }}
+QPlainTextEdit#lobbyBox {{ background: {BG}; border: 1px solid #30343c; border-radius: 8px; padding: 6px 8px; color: {TEXT};
+    selection-background-color: #1d4a40; }}
+QPlainTextEdit#lobbyBox:focus {{ border-color: {ACCENT}; }}
 QSpinBox, QDoubleSpinBox {{ background: {BG}; border: 1px solid #30343c; border-radius: 8px; padding: 6px 8px; color: {TEXT};
                             selection-background-color: #1d4a40; }}
 QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {ACCENT}; }}

@@ -34,8 +34,10 @@ class Settings:
                 # Música del mapa al abrir una partida o tocar un mapa
                 "map_music": True, "music_volume": 45,
                 # Metas propias: [{"kind", "target", "start"}]
-                "goals": []}
-    SECRETS = {"api_key", "auth_code", "gc_token"}
+                "goals": [],
+                # Pre-partida: clave de la API de datos de FACEIT (opcional, para analizar las salas de FACEIT)
+                "faceit_key": ""}
+    SECRETS = {"api_key", "auth_code", "gc_token", "faceit_key"}
 
     def __init__(self, path: Path | None = None):
         self.path = path or data_dir() / "ajustes.json"
@@ -96,6 +98,9 @@ CREATE TABLE IF NOT EXISTS sharecodes (
     code TEXT PRIMARY KEY, status TEXT, demo_url TEXT, match_time INTEGER, message TEXT, match_key TEXT,
     added_at TEXT, tries INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS replays (
+    match_key TEXT PRIMARY KEY, status TEXT, moments_json TEXT, data BLOB, saved_at TEXT
+);
 CREATE TABLE IF NOT EXISTS history (
     key TEXT PRIMARY KEY, steamid INTEGER, mode TEXT, map TEXT, played_at TEXT, duration TEXT,
     score_us INTEGER, score_them INTEGER, result TEXT, kills INTEGER, assists INTEGER, deaths INTEGER,
@@ -139,6 +144,8 @@ class Store:
                  json.dumps(match["detail"]) if "detail" in match else None))
             self.db.commit()
             match_id = int(cursor.lastrowid)
+        if match.get("replay"):
+            self.save_replay(match["match_key"], match["replay"])
         self.link_gsi(match_id, match["map"], played_at)
         return match_id
 
@@ -182,6 +189,30 @@ class Store:
                                               json.dumps(match["scoreboard"]), json.dumps(match["aim"]),
                                               json.dumps(match["detail"]), match_id))
             self.db.commit()
+        if match is not None and match.get("replay"):
+            self.save_replay(match["match_key"], match["replay"])
+
+    # Repeticiones 2D (aparte de la partida: son pesadas y se guardan comprimidas)
+    def save_replay(self, match_key: str, replay: dict | None) -> None:
+        """Guarda la repetición de una partida. None: la demo ya no está y no se vuelve a intentar."""
+        from .replay import encode
+        with self.lock:
+            self.db.execute("INSERT OR REPLACE INTO replays VALUES (?,?,?,?,?)",
+                            (match_key, "ok" if replay else "sin_demo", json.dumps((replay or {}).get("moments") or []),
+                             encode(replay) if replay else None, datetime.now().isoformat(timespec="seconds")))
+            self.db.commit()
+
+    def replay(self, match_key: str) -> dict | None:
+        from .replay import decode
+        with self.lock:
+            row = self.db.execute("SELECT data FROM replays WHERE match_key=? AND status='ok'", (match_key,)).fetchone()
+        return decode(row[0]) if row and row[0] else None
+
+    def replay_index(self) -> dict[str, dict]:
+        """Qué partidas tienen repetición y sus jugadas para clips, sin abrir los datos pesados."""
+        with self.lock:
+            rows = self.db.execute("SELECT match_key, status, moments_json FROM replays").fetchall()
+        return {r[0]: {"status": r[1], "moments": json.loads(r[2] or "[]")} for r in rows}
 
     def mark_no_spots(self, match_id: int) -> None:
         """La demo ya no está: la partida queda sin posiciones para el mapa de calor (y no se reintenta)."""

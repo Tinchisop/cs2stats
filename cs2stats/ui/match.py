@@ -15,6 +15,7 @@ from .charts import RoundStrip
 from .match_parts import cell, color_legend, divider, glow, header_row, missing_note, player_row, team_rows, tone_color
 from .match_tabs import DuelsTab, ImpactTab, overview_tab, page, utility_tab, your_match_tab
 from .motion import reveal, reveal_children
+from .replay import ReplayTab
 from .pages import card, result_text, scroll_page, short_date
 from .theme import (ACCENT, BAD, BG, CT_COLOR, GOOD, MID, MUTED, T_COLOR, fmt_num, fmt_pct, icon, label, panel,
                     rating_color)
@@ -51,7 +52,7 @@ AIM = [
     ("accuracy", t("Precisión\ntotal"), t("Todas las balas que pegaron sobre todas las que disparaste."), _pct, 0.24, 0.16),
 ]
 AIM_WIDTH = 84
-TABS = [("you", t("Tu partida")), ("overview", t("Resumen")), ("board", t("Tabla")), ("aim", t("Puntería")),
+TABS = [("you", t("Tu partida")), ("replay", t("Repetición 2D")), ("overview", t("Resumen")), ("board", t("Tabla")), ("aim", t("Puntería")),
         ("utility", t("Utilidad")), ("duels", t("Cara a cara")), ("impact", t("Impacto"))]
 
 
@@ -76,9 +77,12 @@ class MatchView(QWidget):
 
     back = Signal()
     music_toggled = Signal(bool)
+    replay_requested = Signal(int)
 
-    def __init__(self, m: dict, parent=None, history: list[dict] | None = None, back_text: str = ""):
+    def __init__(self, m: dict, parent=None, history: list[dict] | None = None, back_text: str = "",
+                 replay_loader=None, grid=None):
         super().__init__(parent)
+        self.match_id = m["id"]
         self.setObjectName("matchView")
         self.map_name = m["map"]
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # para que Esc vuelva atrás
@@ -132,7 +136,8 @@ class MatchView(QWidget):
         holder = QVBoxLayout()
         builders = {"you": lambda: your_match_tab(m, history or []), "overview": lambda: overview_tab(m),
                     "board": lambda: self._board_tab(m, s, players), "aim": lambda: self._aim_tab(m, players),
-                    "utility": lambda: utility_tab(m), "duels": lambda: DuelsTab(m), "impact": lambda: ImpactTab(m, history or [])}
+                    "utility": lambda: utility_tab(m), "duels": lambda: DuelsTab(m), "impact": lambda: ImpactTab(m, history or []),
+                    "replay": lambda: ReplayTab(m, replay_loader or (lambda _key: (None, "")), grid)}
         for key, title in TABS:
             button = QPushButton(title)
             button.setObjectName("tabButton")
@@ -144,6 +149,8 @@ class MatchView(QWidget):
             self.buttons[key] = button
             self.pages[key] = builders[key]()
             holder.addWidget(self.pages[key])
+        self.replay_tab: ReplayTab = self.pages["replay"]
+        self.replay_tab.build_requested.connect(lambda: self.replay_requested.emit(self.match_id))
         bar.addStretch(1)
         body.addLayout(bar)
         body.addLayout(holder)
