@@ -35,6 +35,9 @@ a = Analysis(
         'PySide6.QtWebChannel', 'PySide6.QtPdf', 'PySide6.QtPdfWidgets', 'PySide6.QtQuick', 'PySide6.QtQml',
         'PySide6.QtQuickWidgets', 'PySide6.QtPositioning', 'tkinter', 'matplotlib', 'IPython',
     ],
+    # El código de la app va como archivos sueltos en _internal: así el .exe casi no cambia de una versión a otra
+    # (Smart App Control de Windows evalúa de nuevo cada .exe distinto y puede bloquearlo).
+    module_collection_mode={'cs2stats': 'py'},
     noarchive=False,
     optimize=0,
 )
