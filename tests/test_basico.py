@@ -386,5 +386,54 @@ class SinergiaTest(unittest.TestCase):
         self.assertEqual(len(roles["entry"]), 2)
 
 
+class FaceitTest(unittest.TestCase):
+    """Con respuestas armadas con el formato de la API de datos de FACEIT (v4)."""
+
+    PLAYER = {"player_id": "yo-123", "nickname": "Yo", "faceit_url": "https://www.faceit.com/{lang}/players/Yo",
+              "games": {"cs2": {"faceit_elo": 1580, "skill_level": 8, "region": "SA"}}}
+    HISTORY = {"items": [{"match_id": "1-aaa", "status": "FINISHED", "started_at": 1761700000, "finished_at": 1761702400},
+                         {"match_id": "1-bbb", "status": "CANCELLED", "started_at": 1761600000, "finished_at": 0}]}
+    STATS = {"rounds": [{"round_stats": {"Map": "de_mirage", "Score": "13 / 9"}, "teams": [
+        {"team_stats": {"Final Score": "9"}, "players": [{"player_id": "otro", "nickname": "Rival", "player_stats": {}}]},
+        {"team_stats": {"Final Score": "13"}, "players": [
+            {"player_id": "yo-123", "nickname": "Yo", "player_stats": {"Kills": "21", "Deaths": "14", "Assists": "4",
+                                                                       "Headshots %": "52", "ADR": "88.4", "MVPs": "3",
+                                                                       "Result": "1"}},
+            {"player_id": "amigo", "nickname": "Amigo", "player_stats": {}}]}]}]}
+
+    def fake_get(self, url, headers=None):
+        if "/stats" in url:
+            return self.STATS
+        if "/history" in url:
+            return self.HISTORY
+        return self.PLAYER
+
+    def test_trae_tus_partidas_separadas(self):
+        from unittest import mock
+        from cs2stats import faceit
+        from cs2stats.store import Settings, Store
+        home = Path(tempfile.mkdtemp(prefix="cs2stats-faceit-"))
+        store, settings = Store(home / "h.db"), Settings(home / "a.json")
+        settings.set("steamid", ME)
+        settings.set("faceit_key", "x" * 36)
+        with mock.patch.object(faceit, "_get", self.fake_get):
+            self.assertEqual(faceit.sync_faceit(store, settings, lambda _text: None), 1)
+            self.assertEqual(faceit.sync_faceit(store, settings, lambda _text: None), 0)   # no repite partidas
+        rows = store.history(ME)
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual((row["mode"], row["map"], row["result"], row["score_us"], row["score_them"]),
+                         ("faceit", "Mirage", "W", 13, 9))
+        self.assertEqual((row["kills"], row["deaths"], row["hsp"], row["adr"]), (21, 14, 52, 88.4))
+        self.assertEqual(settings["faceit_profile"]["level"], 8)
+        self.assertEqual(store.faceit_elo()[-1]["elo"], 1580)
+
+    def test_progreso_de_nivel(self):
+        from cs2stats.faceit import level_progress
+        share, missing, following = level_progress(1580)
+        self.assertEqual((missing, following), (171, 9))
+        self.assertIsNone(level_progress(2400))
+
+
 if __name__ == "__main__":
     unittest.main()

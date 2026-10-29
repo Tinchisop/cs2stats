@@ -20,7 +20,7 @@ from .charts import BarList, ColumnChart, PercentileBar, SideCompare, TrendChart
 from .heatmap import HeatMap, hot_zones
 from .hud import CoachBot, MatchCarousel, RadarChart, Sparkline, TierProgress, map_picture, tier_progress
 from .motion import CountUp, glow_effect, hover_glow
-from .visual import Avatar, MapCard, PremierBadge, WeaponRow
+from .visual import Avatar, FaceitLevel, MapCard, PremierBadge, WeaponRow
 from .theme import (ACCENT, ACCENT_SOFT, BAD, CT_COLOR, GOOD, MID, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num,
                     fmt_pct, icon, label, panel, rating_color, score_color)
 
@@ -69,9 +69,12 @@ def card(title: str = "", note: str = "", name: str = "card") -> tuple[QFrame, Q
         if title:
             row.addWidget(label(title, "sectionTitle"))
         row.addStretch(1)
-        if note:
+        long_note = len(note) > 70   # una nota larga al costado del título estiraba la página más allá de la ventana
+        if note and not long_note:
             row.addWidget(label(note, "smallMuted"))
         layout.addLayout(row)
+        if note and long_note:
+            layout.addWidget(label(note, "smallMuted", wrap=True))
     return frame, layout
 
 
@@ -315,8 +318,14 @@ class ProfilePage(Page):
             row.addWidget(go)
             body.addWidget(notice)
         if not view["matches"]:
-            body.addWidget(empty_state(t("Cuando importes partidas con demo vas a ver tus métricas comparadas con tu rango."),
-                                       t("Conectar Steam"), "conectar", self.go_to.emit))
+            if view.get("mode") == "faceit":
+                body.addWidget(empty_state(t("Tus partidas de FACEIT ya cuentan arriba y en Partidas, Mapas e Historial. Para "
+                                             "puntería, utilidad, impacto y la repetición 2D, bajá la demo desde la sala del "
+                                             "partido: la app la importa sola desde Descargas."), t("Demos y aviso"), "demos",
+                                           self.go_to.emit))
+            else:
+                body.addWidget(empty_state(t("Cuando importes partidas con demo vas a ver tus métricas comparadas con tu rango."),
+                                           t("Conectar Steam"), "conectar", self.go_to.emit))
             body.addStretch(1)
             return
 
@@ -365,7 +374,16 @@ class ProfilePage(Page):
         self._draw_chart()
 
         premier = [m for m in view["all_matches"] if m.get("rank_type") == 11 and m.get("rank_new")]
-        if len(premier) >= 2:
+        elo = view.get("faceit_elo") or []
+        if view.get("mode") == "faceit" and len(elo) >= 2:
+            box, layout = card(t("ELO de FACEIT"), t("Cada vez que la app lee tu cuenta"))
+            chart = TrendChart()
+            chart.set_data([{"value": e["elo"], "label": short_date(e["at"])[:5], "won": True,
+                             "tip": t("{0} ELO · nivel {1}").format(e["elo"], e["level"])} for e in elo[-40:]],
+                           decimals=0, color="#ff5500")
+            layout.addWidget(chart)
+            body.addWidget(box)
+        if len(premier) >= 2 and view.get("mode") in ("", "premier", None):
             forecast = premier_forecast(view["all_matches"])
             note = (t("Línea punteada: pronóstico si seguís como en las últimas {0}").format(forecast.games) if forecast
                     else t("Después de cada partida con demo"))
@@ -382,8 +400,6 @@ class ProfilePage(Page):
 
     def _header(self, view: dict) -> QWidget:
         box = panel("heroCard")
-        box.after_reveal = lambda w: w.setGraphicsEffect(glow_effect(w, ACCENT, 38, 80))
-        box.setGraphicsEffect(glow_effect(box, ACCENT, 38, 80))
         outer = QVBoxLayout(box)
         outer.setContentsMargins(22, 18, 22, 16)
         outer.setSpacing(14)
@@ -397,11 +413,14 @@ class ProfilePage(Page):
         text.setSpacing(2)
         text.addStretch(1)
         text.addWidget(label(name, "playerName"))
-        history = view["all_history"]
+        history = view["history"]
+        mode = SOURCE_NAMES.get(view.get("mode") or "", "")
         if history:
-            sub = t('{0} partidas en tu historial · {1} con demo').format(len(history), len(view['all_matches']))
+            sub = t('{0} partidas en tu historial · {1} con demo').format(len(history), len(view['matches']))
         else:
-            sub = t('{0} partidas con demo analizada').format(len(view['all_matches']))
+            sub = t('{0} partidas con demo analizada').format(len(view['matches']))
+        if mode:
+            sub = f"{mode} · {sub}"
         note = label(sub, "smallMuted")
         note.setStyleSheet(f"color: {ACCENT_SOFT}; font-size: 12px;")
         text.addWidget(note)
@@ -410,7 +429,7 @@ class ProfilePage(Page):
         row.addSpacing(6)
         row.addWidget(panel("heroDivider"))
         row.addSpacing(6)
-        row.addLayout(self._premier_block(view), 1)
+        row.addLayout(self._faceit_block(view) if view.get("mode") == "faceit" else self._premier_block(view), 1)
         buttons = QVBoxLayout()
         buttons.setSpacing(8)
         sync = QPushButton(t("Buscar partidas"))
@@ -432,7 +451,7 @@ class ProfilePage(Page):
         outer.addWidget(line)
         stats = QHBoxLayout()
         stats.setSpacing(10)
-        source = history if history else view["all_matches"]
+        source = history if history else view["matches"]
         recent = view["matches"][-20:]
         results = [1.0 if m["result"] == "W" else 0.0 for m in recent]
         rolling = [sum(results[max(0, i - 4):i + 1]) / len(results[max(0, i - 4):i + 1]) for i in range(len(results))]
@@ -450,7 +469,11 @@ class ProfilePage(Page):
             else:
                 kd, hs = view["total"]["kd"], view["total"]["hs"]
             items.append(("K/D", kd, lambda v: fmt_num(v, 2), per_match("kd"), TEXT))
-            items.append((t("ADR"), view["total"]["adr"], lambda v: fmt_num(v, 0), per_match("adr"), TEXT))
+            adr = view["total"]["adr"]
+            with_adr = [h["adr"] for h in history if h.get("adr") is not None]
+            if len(with_adr) > len(view["matches"]):   # FACEIT trae el ADR de cada partida aunque no haya demo
+                adr = sum(with_adr) / len(with_adr)
+            items.append((t("ADR"), adr, lambda v: fmt_num(v, 0), per_match("adr"), TEXT))
             items.append((t("HS %"), hs, fmt_pct, per_match("hs", 100), TEXT))
             items.append((t("Rating"), view["total"]["rating"], lambda v: fmt_num(v, 2), per_match("rating"),
                           rating_color(view["total"]["rating"])))
@@ -470,6 +493,43 @@ class ProfilePage(Page):
             stats.addLayout(col, 1)
         outer.addLayout(stats)
         return box
+
+    def _faceit_block(self, view: dict) -> QVBoxLayout:
+        """En el modo FACEIT: tu nivel, tu ELO y cuánto falta para el próximo nivel."""
+        from ..faceit import level_progress
+        me = view.get("faceit") or {}
+        col = QVBoxLayout()
+        col.setSpacing(6)
+        col.addStretch(1)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        progress = level_progress(me.get("elo"))
+        top.addWidget(FaceitLevel(me.get("level"), progress[0] if progress else 1.0, 46))
+        text = QVBoxLayout()
+        text.setSpacing(0)
+        elo = label(t("{0} ELO").format(fmt_num(me["elo"], 0)) if me.get("elo") else t("FACEIT"), "midValue")
+        text.addWidget(elo)
+        text.addWidget(label(me.get("nickname") or t("Sin cuenta conectada"), "smallMuted"))
+        top.addLayout(text)
+        top.addStretch(1)
+        col.addLayout(top)
+        if progress:
+            share, missing, following = progress
+            from ..faceit import LEVEL_COLORS
+            bar = TierProgress(share, LEVEL_COLORS[following])
+            bar.setMaximumWidth(320)
+            col.addWidget(bar)
+            col.addWidget(label(t("+{0} de ELO para el nivel {1}").format(missing, following), "tierNote"))
+        elif me.get("elo"):
+            col.addWidget(label(t("Nivel 10: el más alto de FACEIT"), "tierNote"))
+        else:
+            go = QPushButton(t("Conectá FACEIT para ver tu nivel y tus partidas  →"))
+            go.setObjectName("linkButton")
+            go.setCursor(Qt.CursorShape.PointingHandCursor)
+            go.clicked.connect(lambda: self.go_to.emit("conectar"))
+            col.addWidget(go)
+        col.addStretch(1)
+        return col
 
     def _premier_block(self, view: dict) -> QVBoxLayout:
         col = QVBoxLayout()
@@ -786,6 +846,9 @@ class MatchesPage(Page):
         self.maps = [r["map"] for r in rows]
         self.empty.setVisible(not rows)
         self.box.setVisible(bool(rows))
+        # Se vacía primero (así se van las placas viejas de una vez) y se llena sin redibujar fila por fila.
+        self.table.setUpdatesEnabled(False)
+        self.table.setRowCount(0)
         self.table.setRowCount(len(rows))
         for index, r in enumerate(rows):
             text, color = result_text(r["result"], r["us"], r["them"])
@@ -800,8 +863,9 @@ class MatchesPage(Page):
             for col, item in enumerate(values):
                 self.table.setItem(index, col, item)
             # Premier con la placa del juego.
-            self.table.setCellWidget(index, 11, premier_cell(r.get("premier_value"), r.get("premier_change"), 22)
-                                     if r.get("premier_value") else None)
+            if r.get("premier_value"):
+                self.table.setCellWidget(index, 11, premier_cell(r["premier_value"], r.get("premier_change"), 22))
+        self.table.setUpdatesEnabled(True)
         fit_table(self.table, 42)
 
     @staticmethod

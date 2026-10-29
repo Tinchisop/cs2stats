@@ -25,6 +25,7 @@ from ..resumen import match_message
 from ..sync import build_replay, reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
 from ..assets import (MAP_MUSIC, avatar_path, download_avatar, download_player_avatars, extract_game_assets,
                       extract_map_music, extract_overviews, map_music)
+from ..faceit import sync_faceit
 from ..prematch import LobbyError, collect, detect_party
 from ..nades import MapGrid
 from ..nades import build_lineups
@@ -196,21 +197,29 @@ def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
                      "premier": premier, "premier_value": m.get("rank_new") if m.get("rank_type") == 11 else None,
                      "premier_change": m.get("rank_change")})
 
-    def same(h: dict, m: dict) -> bool:
-        if map_label(m["map"]).lower() != h["map"].lower():
-            return False
+    by_result: dict[tuple, list[datetime]] = {}
+    for m in demos:
         try:
-            gap = abs((datetime.fromisoformat(h["played_at"]) - datetime.fromisoformat(m["played_at"])).total_seconds())
-        except ValueError:
+            when = datetime.fromisoformat(m["played_at"])
+        except (TypeError, ValueError):
+            continue
+        by_result.setdefault((map_label(m["map"]).lower(), m["score_us"], m["score_them"]), []).append(when)
+
+    def has_demo(h: dict) -> bool:
+        try:
+            when = datetime.fromisoformat(h["played_at"])
+        except (TypeError, ValueError):
             return False
-        return gap <= 3 * 3600 and (h["score_us"], h["score_them"]) == (m["score_us"], m["score_them"])
+        limit = (48 if h["mode"] == "faceit" else 3) * 3600
+        return any(abs((when - other).total_seconds()) <= limit
+                   for other in by_result.get((h["map"].lower(), h["score_us"], h["score_them"]), []))
 
     for h in history:
-        if any(same(h, m) for m in demos):
+        if has_demo(h):
             continue
         rows.append({"id": None, "played_at": h["played_at"], "mode": h["mode"], "map": h["map"], "result": h["result"],
                      "us": h["score_us"], "them": h["score_them"], "k": h["kills"], "a": h["assists"], "d": h["deaths"],
-                     "adr": None, "hs": h["hsp"], "rating": None, "premier": ""})
+                     "adr": h.get("adr"), "hs": h["hsp"], "rating": None, "premier": ""})
     rows.sort(key=lambda r: r["played_at"] or "")
     return rows
 
@@ -251,6 +260,8 @@ class MainWindow(QMainWindow):
         self.replay_runner = TaskRunner("repeticion", self)
         self.replay_runner.done.connect(self._replay_done)
         self.replay_for: int | None = None
+        self.faceit_runner = TaskRunner("faceit", self)
+        self.faceit_runner.done.connect(self._faceit_done)
         self.lobby_runner = TaskRunner("pre-partida", self)
         self.lobby_runner.done.connect(self._lobby_done)
         self.lobby_task = ""
@@ -296,8 +307,9 @@ class MainWindow(QMainWindow):
         header.addSpacing(14)
         header.addWidget(label(t("Modo"), "smallMuted"))
         self.mode = QComboBox()
-        self.mode.addItem(t("Todos"), "")
-        self.mode.currentIndexChanged.connect(self.refresh)
+        self.mode.addItem(t("Todos los modos"), "")
+        self.mode.setToolTip(t("Cada modo muestra sus números por separado: Premier por un lado, FACEIT por otro"))
+        self.mode.currentIndexChanged.connect(self._mode_changed)
         header.addWidget(self.mode)
         header.addSpacing(10)
         header.addWidget(label(t("Comparar"), "smallMuted"))
@@ -310,6 +322,7 @@ class MainWindow(QMainWindow):
         content.addWidget(self.header_bar)
         self.match_view: MatchView | None = None
         self.current_page = "perfil"
+        self.stale: set[str] = set()
         self.music = MapMusic(self)
         self.music.set_volume(self.settings["music_volume"])
         self.music.changed.connect(self._music_changed)
@@ -352,6 +365,9 @@ class MainWindow(QMainWindow):
         connect.disconnect_gc.connect(self.logout_gc)
         connect.connect_history.connect(self.login_history)
         connect.sync_now.connect(self.start_steam_sync)
+        connect.save_faceit.connect(self.save_faceit_key)
+        connect.sync_faceit.connect(self.start_faceit_sync)
+        self.faceit_runner.message.connect(connect.set_faceit_status)
         connect.test_message.connect(self.test_message)
         connect.message_toggled.connect(lambda on: (self.settings.set("steam_message", on), self.refresh_connect()))
         connect.add_old_codes.connect(lambda codes: (self.store.add_sharecodes(codes), self.refresh_connect(), self.start_steam_sync()))
@@ -392,6 +408,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(400, self.scan)
         QTimer.singleShot(800, self.load_assets)
         QTimer.singleShot(1500, self.start_steam_sync)
+        QTimer.singleShot(2500, self.start_faceit_sync)
+        self.steam_timer.timeout.connect(self.start_faceit_sync)
         if not start_hidden:
             self.show()
 
@@ -607,6 +625,7 @@ class MainWindow(QMainWindow):
         self._place_indicator()
         if key not in ("partidas", "mapas") and not self.radio_on:
             self.music.stop()
+        self._update_page(key)
         self.stack.setCurrentWidget(self.pages[key])
         self.title.setText(self.TITLES[key])
         if changed:
@@ -622,6 +641,10 @@ class MainWindow(QMainWindow):
             self.refresh_connect()
 
     # Datos
+    def _mode_changed(self) -> None:
+        self.settings.set("mode_filter", self.mode.currentData() or "")
+        self.refresh()
+
     def _recent_changed(self) -> None:
         self.settings.set("recent_n", self.recent_n.currentData())
         self.refresh()
@@ -630,15 +653,18 @@ class MainWindow(QMainWindow):
         steamid = self.settings["steamid"]
         all_matches = self.store.matches(steamid)
         for m in all_matches:
-            m["s"] = summarize(m["rounds"])
+            if "s" not in m:
+                m["s"] = summarize(m["rounds"])
         all_history = self.store.history(steamid)
         sources = sorted({m["source"] for m in all_matches} | {h["mode"] for h in all_history})
-        current = self.mode.currentData()
+        current = self.settings["mode_filter"]
         self.mode.blockSignals(True)
         self.mode.clear()
-        self.mode.addItem(t("Todos"), "")
+        self.mode.addItem(t("Todos los modos"), "")
         for source in sources:
             self.mode.addItem(SOURCE_NAMES.get(source, source), source)
+        if self.mode.findData(current) < 0 and current:
+            self.mode.addItem(SOURCE_NAMES.get(current, current), current)   # el modo elegido aunque todavía no tenga partidas
         self.mode.setCurrentIndex(max(0, self.mode.findData(current)))
         self.mode.blockSignals(False)
         mode = self.mode.currentData()
@@ -669,14 +695,21 @@ class MainWindow(QMainWindow):
             "history": history, "all_history": all_history, "premier": premier, "premier_tier": tier_of(premier),
             "comparisons": comparisons, "recent_comparisons": recent_comparisons, "reference": reference,
             "reference_n": reference_n, "highlights": highlights(comparisons), "rows": unify_rows(matches, history),
-            "steam": steam_ready(self.settings),
+            "steam": steam_ready(self.settings), "mode": mode,
+            "faceit": self.settings["faceit_profile"] or {}, "faceit_elo": self.store.faceit_elo(),
         }
-        for page in self.pages.values():
-            page.update_view(self.view)
+        self.stale = set(self.pages)
+        self._update_page(self.current_page)
         weak = sum(1 for i in self.view["insights"] if i.kind == "flojo")
         self.advice_badge.setText(str(weak))
         self.advice_badge.setVisible(bool(weak))
         self._update_dots()
+
+    def _update_page(self, key: str) -> None:
+        """Arma una pantalla con la vista actual si quedó vieja (refresh solo arma la que está a la vista)."""
+        if self.view is not None and key in self.stale:
+            self.stale.discard(key)
+            self.pages[key].update_view(self.view)
 
     def _update_dots(self) -> None:
         ready = steam_ready(self.settings)
@@ -697,6 +730,8 @@ class MainWindow(QMainWindow):
     def refresh_connect(self) -> None:
         self.pages["conectar"].set_state(self.settings, self.steam_runner.busy or self.history_runner.busy,
                                          self.store.sharecodes())
+        self.pages["conectar"].set_faceit(self.settings, self.faceit_runner.busy,
+                                          len(self.store.history_keys("faceit:")))
         self._update_dots()
 
     def refresh_demos(self) -> None:
@@ -775,6 +810,23 @@ class MainWindow(QMainWindow):
             return
         if self.steam_runner.start(lambda say: sync_steam(self.store, self.settings, say)):
             self.refresh_connect()
+
+    # FACEIT
+    def save_faceit_key(self, key: str) -> None:
+        self.settings.set("faceit_key", key)
+        self.pages["prepartida"].set_key(key)
+        self.start_faceit_sync()
+
+    def start_faceit_sync(self) -> None:
+        if self.settings.secret("faceit_key"):
+            self.faceit_runner.start(lambda say: sync_faceit(self.store, self.settings, say))
+            self.refresh_connect()
+
+    def _faceit_done(self, added, error: str) -> None:
+        if error:
+            self.pages["conectar"].set_faceit_status(error, True)
+        self.refresh()
+        self.refresh_connect()
 
     def _steam_done(self, imported, error: str) -> None:
         if error:
@@ -1129,6 +1181,7 @@ class MainWindow(QMainWindow):
         self.assets_runner.stop()
         self.replay_runner.stop()
         self.lobby_runner.stop()
+        self.faceit_runner.stop()
         if self.gsi_server:
             self.gsi_server.stop()
         self.music.shutdown()

@@ -456,7 +456,7 @@ class TierProgress(Growing, QWidget):
         self.sweep.setStartValue(0.0)
         self.sweep.setEndValue(1.0)
         self.sweep.setDuration(2600)
-        self.sweep.setLoopCount(-1)
+        self.sweep.setLoopCount(2)   # antes daba vueltas sin parar: con muchas barras en pantalla trababa todo
         self.sweep.valueChanged.connect(self._sweep)
 
     def _sweep(self, value: float) -> None:
@@ -465,7 +465,7 @@ class TierProgress(Growing, QWidget):
 
     def showEvent(self, event):  # noqa: N802
         super().showEvent(event)
-        self.sweep.start()
+        QTimer.singleShot(self.grow_ms, self.sweep.start)   # el brillo pasa cuando la barra terminó de llenarse
 
     def hideEvent(self, event):  # noqa: N802
         self.sweep.stop()

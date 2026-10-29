@@ -210,6 +210,8 @@ class ConnectPage(Page):
     add_old_codes = Signal(list)
     test_message = Signal()
     message_toggled = Signal(bool)
+    save_faceit = Signal(str)
+    sync_faceit = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -319,6 +321,31 @@ class ConnectPage(Page):
         layout.addWidget(add, 0, Qt.AlignmentFlag.AlignLeft)
         body.addWidget(box)
 
+        box, layout = card(t("FACEIT (opcional)"),
+                           t("Con una clave gratis de la API de datos de FACEIT, la app trae tu nivel, tu ELO y tus partidas "
+                             "de FACEIT con sus números, separadas de Premier."))
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.faceit_key = QLineEdit()
+        self.faceit_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.faceit_key.setPlaceholderText(t("Clave de la API de datos de FACEIT (Server side)"))
+        row.addWidget(self.faceit_key, 1)
+        save_faceit = button(t("Guardar y traer mis partidas"), "check", primary=True)
+        save_faceit.clicked.connect(self._save_faceit)
+        row.addWidget(save_faceit)
+        self.faceit_sync_button = button(t("Actualizar"), "scan")
+        self.faceit_sync_button.clicked.connect(self.sync_faceit)
+        row.addWidget(self.faceit_sync_button)
+        layout.addLayout(row)
+        how = QPushButton(t("Cómo conseguir la clave: developers.faceit.com › App Studio › creá una app › API keys › Server side"))
+        how.setObjectName("linkButton")
+        how.setCursor(Qt.CursorShape.PointingHandCursor)
+        how.clicked.connect(lambda: open_url("https://developers.faceit.com/"))
+        layout.addWidget(how, 0, Qt.AlignmentFlag.AlignLeft)
+        self.faceit_state = label("", "smallMuted", wrap=True)
+        layout.addWidget(self.faceit_state)
+        body.addWidget(box)
+
         box, layout = card(t("Sincronización"))
         row = QHBoxLayout()
         self.sync_state = label("", "body", wrap=True)
@@ -364,6 +391,31 @@ class ConnectPage(Page):
         self.step2_msg.setStyleSheet("")
         self.save_key.emit(key)
         self.key.clear()
+
+    def _save_faceit(self) -> None:
+        key = self.faceit_key.text().strip()
+        if len(key) < 30:
+            self.set_faceit_status(t("La clave de FACEIT es larga (unos 36 caracteres con guiones). Copiala entera."), True)
+            return
+        self.save_faceit.emit(key)
+        self.faceit_key.clear()
+
+    def set_faceit_status(self, text: str, error: bool = False) -> None:
+        self.faceit_state.setText(text)
+        self.faceit_state.setStyleSheet(f"color: {BAD};" if error else "")
+
+    def set_faceit(self, settings, busy: bool, count: int) -> None:
+        has_key = bool(settings.secret("faceit_key"))
+        me = settings["faceit_profile"] or {}
+        self.faceit_sync_button.setEnabled(has_key and not busy)
+        if busy:
+            return
+        if not has_key:
+            self.set_faceit_status(t("Sin clave: tus partidas de FACEIT solo entran si bajás la demo desde la sala."))
+        elif me.get("nickname"):
+            synced = settings["faceit_synced_at"]
+            self.set_faceit_status(t("Conectado como {0} · nivel {1} · {2} ELO · {3} partidas guardadas · última vez {4}").format(
+                me["nickname"], me.get("level") or "—", me.get("elo") or "—", count, short_date(synced) if synced else "—"))
 
     def _add_old(self) -> None:
         codes = [clean_sharecode(line) for line in self.old_codes.toPlainText().splitlines()]

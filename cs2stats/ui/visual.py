@@ -138,6 +138,35 @@ class MapTitle(QWidget):
         painter.drawPath(path)
 
 
+class FaceitLevel(QWidget):
+    """Nivel de FACEIT como en su página: círculo con el número y un aro del color del nivel, lleno según el ELO."""
+
+    def __init__(self, level: int | None, share: float = 1.0, size: int = 44, parent=None):
+        super().__init__(parent)
+        from ..faceit import LEVEL_COLORS
+        self.level = int(level) if level else None
+        self.share = max(0.0, min(1.0, share))
+        self.color = QColor(LEVEL_COLORS.get(self.level or 0, "#5f6570"))
+        self.setFixedSize(size, size)
+        self.setToolTip(t("Nivel {0} de FACEIT").format(self.level) if self.level else t("Sin nivel de FACEIT"))
+
+    def paintEvent(self, _event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        side = self.width()
+        ring = QRectF(3, 3, side - 6, side - 6)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#1a1d22"))
+        painter.drawEllipse(ring)
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 3))
+        painter.drawArc(ring, 0, 360 * 16)
+        painter.setPen(QPen(self.color, 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawArc(ring, 225 * 16, -int(270 * 16 * (self.share if self.level != 10 else 1.0)))
+        painter.setPen(self.color)
+        painter.setFont(QFont("Segoe UI Variable Display", max(9, side // 3), QFont.Weight.Black))
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, str(self.level) if self.level else "–")
+
+
 class PremierBadge(QWidget):
     """Rating de Premier como lo muestra CS2: placa inclinada del color del rango, dos rayas a la izquierda
     y el número en cursiva, con los miles grandes y el resto más chico (8,851)."""

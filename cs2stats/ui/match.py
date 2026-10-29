@@ -138,6 +138,9 @@ class MatchView(QWidget):
                     "board": lambda: self._board_tab(m, s, players), "aim": lambda: self._aim_tab(m, players),
                     "utility": lambda: utility_tab(m), "duels": lambda: DuelsTab(m), "impact": lambda: ImpactTab(m, history or []),
                     "replay": lambda: ReplayTab(m, replay_loader or (lambda _key: (None, "")), grid)}
+        self.builders = builders
+        self.holder = holder
+        self.cards: dict[str, list[QFrame]] = {}
         for key, title in TABS:
             button = QPushButton(title)
             button.setObjectName("tabButton")
@@ -147,21 +150,12 @@ class MatchView(QWidget):
             group.addButton(button)
             bar.addWidget(button)
             self.buttons[key] = button
-            self.pages[key] = builders[key]()
-            holder.addWidget(self.pages[key])
-        self.replay_tab: ReplayTab = self.pages["replay"]
+        self.replay_tab: ReplayTab = self._page("replay")
         self.replay_tab.build_requested.connect(lambda: self.replay_requested.emit(self.match_id))
         bar.addStretch(1)
         body.addLayout(bar)
         body.addLayout(holder)
         body.addStretch(1)
-        # Las tarjetas principales de cada pestaña llevan un brillo suave (y son las que entran animadas).
-        self.cards: dict[str, list[QFrame]] = {}
-        for key, widget in self.pages.items():
-            self.cards[key] = [frame for frame in widget.findChildren(QFrame, options=Qt.FindChildOption.FindDirectChildrenOnly)
-                               if frame.objectName() in ("card", "identityCard", "rowMe")]
-            for frame in self.cards[key]:
-                glow(frame, ACCENT, 30, 60)
         self.current = ""
         self.show_tab("you", animate=False)
 
@@ -169,25 +163,39 @@ class MatchView(QWidget):
         self.music_button.setChecked(on)
         self.music_button.setIcon(icon("music", ACCENT if on else "#dfe2e7", 16))
 
+    def _page(self, key: str) -> QWidget:
+        """La pestaña se arma la primera vez que hace falta: abrir una partida no espera a las otras siete."""
+        if key not in self.pages:
+            widget = self.builders[key]()
+            widget.setVisible(False)
+            self.pages[key] = widget
+            self.holder.addWidget(widget)
+            # Las tarjetas principales son las que entran animadas.
+            self.cards[key] = [frame for frame in widget.findChildren(QFrame, options=Qt.FindChildOption.FindDirectChildrenOnly)
+                               if frame.objectName() in ("card", "identityCard", "rowMe")]
+        return self.pages[key]
+
     def animate_in(self) -> None:
         """Al abrir la partida: la cabecera baja suave y después entran las tarjetas una por una."""
         reveal(self.header)
-        reveal_children(self.cards[self.current], then=lambda w: glow(w, ACCENT, 30, 60))
+        reveal_children(self.cards.get(self.current, []))
 
     def show_tab(self, key: str, animate: bool = True) -> None:
         if key == self.current:
             return
         self.current = key
+        self._page(key)
         for name, widget in self.pages.items():
             widget.setVisible(name == key)
-            self.buttons[name].setChecked(name == key)
+        for name, btn in self.buttons.items():
+            btn.setChecked(name == key)
             if name == key:
-                glow(self.buttons[name], ACCENT, 22, 150)
+                glow(btn, ACCENT, 22, 150)
             else:
-                self.buttons[name].setGraphicsEffect(None)
+                btn.setGraphicsEffect(None)
         self.area.verticalScrollBar().setValue(0)
         if animate:
-            reveal_children(self.cards[key], then=lambda w: glow(w, ACCENT, 30, 60))
+            reveal_children(self.cards.get(key, []))
 
     def mousePressEvent(self, event):  # noqa: N802
         if event.button() == Qt.MouseButton.BackButton:

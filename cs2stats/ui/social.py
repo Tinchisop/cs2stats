@@ -321,7 +321,7 @@ class Medal(Growing, QWidget):
             self.sweep.setStartValue(0.0)
             self.sweep.setEndValue(1.0)
             self.sweep.setDuration(3200)
-            self.sweep.setLoopCount(-1)
+            self.sweep.setLoopCount(1)   # una pasada al aparecer y otra al pasar el mouse
             self.sweep.valueChanged.connect(self._sweep)
 
     def _sweep(self, value: float) -> None:
@@ -337,6 +337,11 @@ class Medal(Growing, QWidget):
         if self.unlocked:
             self.sweep.stop()
         super().hideEvent(event)
+
+    def enterEvent(self, event):  # noqa: N802
+        if self.unlocked and self.sweep.state() != QVariantAnimation.State.Running:
+            self.sweep.start()
+        super().enterEvent(event)
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)

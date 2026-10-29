@@ -35,8 +35,10 @@ class Settings:
                 "map_music": True, "music_volume": 45,
                 # Metas propias: [{"kind", "target", "start"}]
                 "goals": [],
-                # Pre-partida: clave de la API de datos de FACEIT (opcional, para analizar las salas de FACEIT)
-                "faceit_key": ""}
+                # FACEIT: clave de la API de datos (opcional), tu perfil y cuándo se trajeron tus partidas
+                "faceit_key": "", "faceit_profile": {}, "faceit_synced_at": "",
+                # Modo elegido arriba ("" = todos): cada modo muestra sus números por separado
+                "mode_filter": "premier"}
     SECRETS = {"api_key", "auth_code", "gc_token", "faceit_key"}
 
     def __init__(self, path: Path | None = None):
@@ -98,6 +100,9 @@ CREATE TABLE IF NOT EXISTS sharecodes (
     code TEXT PRIMARY KEY, status TEXT, demo_url TEXT, match_time INTEGER, message TEXT, match_key TEXT,
     added_at TEXT, tries INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS faceit_elo (
+    at TEXT PRIMARY KEY, elo INTEGER, level INTEGER
+);
 CREATE TABLE IF NOT EXISTS replays (
     match_key TEXT PRIMARY KEY, status TEXT, moments_json TEXT, data BLOB, saved_at TEXT
 );
@@ -116,10 +121,14 @@ class Store:
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        self.version = 0          # sube con cada cambio: invalida la caché de partidas
+        self._cache: dict = {}
         columns = {row[1] for row in self.db.execute("PRAGMA table_info(matches)")}
         for column in ("grenades_json", "grid_json", "aim_json", "detail_json"):
             if column not in columns:
                 self.db.execute(f"ALTER TABLE matches ADD COLUMN {column} TEXT")
+        if "adr" not in {row[1] for row in self.db.execute("PRAGMA table_info(history)")}:
+            self.db.execute("ALTER TABLE history ADD COLUMN adr REAL")   # las partidas de FACEIT traen su ADR
         self.db.commit()
 
     # Partidas
@@ -142,15 +151,26 @@ class Store:
                  json.dumps(match.get("grenades") or []), json.dumps(match.get("grid") or []),
                  json.dumps(match["aim"]) if "aim" in match else None,
                  json.dumps(match["detail"]) if "detail" in match else None))
-            self.db.commit()
+            self._commit()
             match_id = int(cursor.lastrowid)
         if match.get("replay"):
             self.save_replay(match["match_key"], match["replay"])
         self.link_gsi(match_id, match["map"], played_at)
         return match_id
 
+    def _commit(self) -> None:
+        self.db.commit()
+        self.version += 1
+        self._cache.clear()
+
     def matches(self, steamid: int) -> list[dict]:
-        """Todas las partidas del jugador, de la más vieja a la más nueva, con sus rondas."""
+        """Todas las partidas del jugador, de la más vieja a la más nueva, con sus rondas.
+
+        Se leen una vez y quedan en memoria hasta el próximo cambio en la base (es la lectura más pesada de la app)."""
+        key = ("matches", steamid, self.version)
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
         with self.lock:
             rows = self.db.execute("SELECT * FROM matches WHERE steamid=? ORDER BY played_at, id", (steamid,)).fetchall()
         result = []
@@ -169,6 +189,7 @@ class Store:
                 r["match_id"] = item["id"]
                 r["map"] = item["map"]
             result.append(item)
+        self._cache[key] = result
         return result
 
     def nade_data(self) -> list[dict]:
@@ -188,7 +209,7 @@ class Store:
                                 "WHERE id=?", (json.dumps(match["rounds"]), json.dumps(match["weapons"]),
                                               json.dumps(match["scoreboard"]), json.dumps(match["aim"]),
                                               json.dumps(match["detail"]), match_id))
-            self.db.commit()
+            self._commit()
         if match is not None and match.get("replay"):
             self.save_replay(match["match_key"], match["replay"])
 
@@ -200,7 +221,7 @@ class Store:
             self.db.execute("INSERT OR REPLACE INTO replays VALUES (?,?,?,?,?)",
                             (match_key, "ok" if replay else "sin_demo", json.dumps((replay or {}).get("moments") or []),
                              encode(replay) if replay else None, datetime.now().isoformat(timespec="seconds")))
-            self.db.commit()
+            self._commit()
 
     def replay(self, match_key: str) -> dict | None:
         from .replay import decode
@@ -224,7 +245,7 @@ class Store:
                     r.setdefault("kill_spots", [])
                     r.setdefault("death_spot", None)
                 self.db.execute("UPDATE matches SET rounds_json=? WHERE id=?", (json.dumps(rounds), match_id))
-                self.db.commit()
+                self._commit()
 
     def grids(self) -> list[tuple[str, list]]:
         """El mapa armado con las posiciones de cada partida (para dibujar el mapa de calor)."""
@@ -246,7 +267,7 @@ class Store:
             if key:
                 # Si se borra a mano, que no vuelva a importarse sola.
                 self.db.execute("UPDATE files SET status='borrada' WHERE match_key=?", (key[0],))
-            self.db.commit()
+            self._commit()
 
     # Archivos ya vistos
     def file_status(self, path: str) -> dict | None:
@@ -258,7 +279,7 @@ class Store:
         with self.lock:
             self.db.execute("INSERT OR REPLACE INTO files VALUES (?,?,?,?,?,?,?)",
                             (path, size, mtime, status, match_key, message, datetime.now().isoformat(timespec="seconds")))
-            self.db.commit()
+            self._commit()
 
     def forget_demo_matches(self) -> None:
         """Para volver a leer las demos con una versión nueva del lector."""
@@ -268,12 +289,12 @@ class Store:
             # Las que ya tienen URL se vuelven a bajar directo; las demás vuelven a pasar por el Game Coordinator.
             self.db.execute("UPDATE sharecodes SET status = CASE WHEN demo_url IS NOT NULL AND demo_url != '' "
                             "THEN 'con_url' ELSE 'nueva' END, tries=0 WHERE status IN ('importada', 'vencida')")
-            self.db.commit()
+            self._commit()
 
     def set_played_at(self, match_key: str, played_at: str) -> None:
         with self.lock:
             self.db.execute("UPDATE matches SET played_at=? WHERE match_key=?", (played_at, match_key))
-            self.db.commit()
+            self._commit()
 
     # Códigos de partida (Match History API)
     def add_sharecodes(self, codes: list[str]) -> int:
@@ -284,7 +305,7 @@ class Store:
                     "INSERT OR IGNORE INTO sharecodes (code, status, added_at, tries) VALUES (?, 'nueva', ?, 0)",
                     (code, datetime.now().isoformat(timespec="seconds")))
                 added += cursor.rowcount
-            self.db.commit()
+            self._commit()
         return added
 
     def sharecodes(self, statuses: tuple[str, ...] | None = None) -> list[dict]:
@@ -299,7 +320,7 @@ class Store:
         names = ", ".join(f"{k}=?" for k in fields)
         with self.lock:
             self.db.execute(f"UPDATE sharecodes SET {names} WHERE code=?", (*fields.values(), code))
-            self.db.commit()
+            self._commit()
 
     # Historial completo (Datos personales del juego)
     def save_history(self, steamid: int, rows: list[dict]) -> int:
@@ -308,18 +329,41 @@ class Store:
             for row in rows:
                 if not row["played_at"] or row["played_at"] < "2023-09-27":
                     continue  # partidas de CS:GO, antes de que saliera CS2
-                key = f"{row['played_at']}|{row['map']}"
+                key = row.get("key") or f"{row['played_at']}|{row['map']}"
                 cursor = self.db.execute(
-                    """INSERT OR REPLACE INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    """INSERT OR REPLACE INTO history (key, steamid, mode, map, played_at, duration, score_us, score_them,
+                       result, kills, assists, deaths, mvps, hsp, score, demo_url, players_json, adr)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (key, steamid, row["mode"], row["map"], row["played_at"], row["duration"], row["score_us"],
                      row["score_them"], row["result"], row["kills"], row["assists"], row["deaths"], row["mvps"],
                      row["hsp"], row["score"], row["demo_url"],
-                     json.dumps({"team": row["team"], "rivals": row["rivals"]}, ensure_ascii=False)))
+                     json.dumps({"team": row["team"], "rivals": row["rivals"]}, ensure_ascii=False), row.get("adr")))
                 added += cursor.rowcount
-            self.db.commit()
+            self._commit()
         return added
 
+    def history_keys(self, prefix: str) -> set[str]:
+        with self.lock:
+            return {r[0] for r in self.db.execute("SELECT key FROM history WHERE key LIKE ?", (prefix + "%",))}
+
+    def add_faceit_elo(self, at: str, elo: int, level: int) -> None:
+        """Guarda tu ELO de FACEIT si cambió desde la última vez (así se arma su evolución)."""
+        with self.lock:
+            last = self.db.execute("SELECT elo FROM faceit_elo ORDER BY at DESC LIMIT 1").fetchone()
+            if last and last[0] == elo:
+                return
+            self.db.execute("INSERT OR REPLACE INTO faceit_elo VALUES (?,?,?)", (at, elo, level))
+            self._commit()
+
+    def faceit_elo(self) -> list[dict]:
+        with self.lock:
+            rows = self.db.execute("SELECT at, elo, level FROM faceit_elo ORDER BY at").fetchall()
+        return [{"at": r[0], "elo": r[1], "level": r[2]} for r in rows]
+
     def history(self, steamid: int) -> list[dict]:
+        key = ("history", steamid, self.version)
+        if key in self._cache:
+            return self._cache[key]
         with self.lock:
             rows = self.db.execute("SELECT * FROM history WHERE steamid=? ORDER BY played_at", (steamid,)).fetchall()
         items = []
@@ -328,6 +372,7 @@ class Store:
             players = json.loads(item.pop("players_json") or "{}")
             item["team"], item["rivals"] = players.get("team", []), players.get("rivals", [])
             items.append(item)
+        self._cache[key] = items
         return items
 
     # Avisos de fin de partida (GSI)
@@ -338,7 +383,7 @@ class Store:
                    score, match_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)""",
                 (data["ended_at"], data["map"], data["mode"], data["side"], data["score_us"], data["score_them"],
                  data["kills"], data["assists"], data["deaths"], data["mvps"], data["score"]))
-            self.db.commit()
+            self._commit()
             return int(cursor.lastrowid)
 
     def pending_gsi(self) -> list[dict]:
@@ -349,7 +394,7 @@ class Store:
     def dismiss_gsi(self, gsi_id: int) -> None:
         with self.lock:
             self.db.execute("UPDATE gsi_matches SET match_id=0 WHERE id=?", (gsi_id,))
-            self.db.commit()
+            self._commit()
 
     def link_gsi(self, match_id: int, map_name: str, played_at: str) -> None:
         """Marca como resuelto el aviso de la misma partida (mismo mapa, hasta 2 días antes de la demo)."""
@@ -365,5 +410,5 @@ class Store:
             if item["map"] == map_name and -6 * 3600 <= (when - ended).total_seconds() <= 2 * 86400:
                 with self.lock:
                     self.db.execute("UPDATE gsi_matches SET match_id=? WHERE id=?", (match_id, item["id"]))
-                    self.db.commit()
+                    self._commit()
                 return
