@@ -100,7 +100,7 @@ def player_row(p: dict, cells: list[QLabel], best: bool = False, crown: str = ""
     name = QLabel(QFontMetrics(frame.font()).elidedText(p["name"], Qt.TextElideMode.ElideRight, NAME_WIDTH - 10))
     name.setTextFormat(Qt.TextFormat.PlainText)
     name.setToolTip(p["name"])
-    name.setStyleSheet(f"color: {'#ff6b8f' if p.get('me') else TEXT}; font-size: 14px; font-weight: {700 if p.get('me') else 500};")
+    name.setStyleSheet(f"color: {'#6ff0cc' if p.get('me') else TEXT}; font-size: 14px; font-weight: {700 if p.get('me') else 500};")
     row.addWidget(name)
     if p.get("me"):
         row.addSpacing(8)

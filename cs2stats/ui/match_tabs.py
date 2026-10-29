@@ -536,7 +536,7 @@ class DuelsTab(QWidget):
             who.setSpacing(8)
             who.addWidget(player_face(ally, 28))
             name = QLabel(QFontMetrics(self.font()).elidedText(ally["name"], Qt.TextElideMode.ElideRight, NAME_WIDTH))
-            name.setStyleSheet(f"color: {'#ff6b8f' if ally.get('me') else CT_COLOR}; font-weight: 700;")
+            name.setStyleSheet(f"color: {'#6ff0cc' if ally.get('me') else CT_COLOR}; font-weight: 700;")
             who.addWidget(name)
             who.addStretch(1)
             grid.addLayout(who, row, 0)

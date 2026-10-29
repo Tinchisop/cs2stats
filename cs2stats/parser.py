@@ -142,6 +142,7 @@ def parse_demo(path: str, steamid: int) -> dict:
         raise NotInDemo(tr("No jugaste esta partida (tu cuenta no aparece en la demo)."))
 
     deaths = events.get("player_death", [])
+    _add_death_spots(parser, deaths)
     hurts = events.get("player_hurt", [])
     blinds = events.get("player_blind", [])
     all_fires = events.get("weapon_fire", [])
@@ -228,7 +229,7 @@ def parse_demo(path: str, steamid: int) -> dict:
                 "buy": _buy_type(equip, pistol), "team_buy": _buy_type(team_equip, pistol),
                 "flash": 0, "smoke": 0, "he": 0, "molotov": 0, "decoy": 0,
                 "enemies_flashed": 0, "blind_time": 0.0, "team_flashed": 0, "kill_weapons": [],
-                "he_damage": 0.0, "he_team_damage": 0.0,
+                "he_damage": 0.0, "he_team_damage": 0.0, "kill_spots": [], "death_spot": None,
                 "mvp": float((states.get(window["end"] + MVP_DELAY, {}).get(target) or {}).get("mvps") or 0)
                 > float(me_start.get("mvps") or 0),
             }
@@ -256,6 +257,8 @@ def parse_demo(path: str, steamid: int) -> dict:
                     info["kills"] += 1
                     gun = weapon_name(row.get("weapon"))
                     info["kill_weapons"].append(gun)
+                    if row.get("killer_spot"):
+                        info["kill_spots"].append(row["killer_spot"])
                     weapon_row(gun)["kills"] += 1
                     if row.get("headshot"):
                         info["hs_kills"] += 1
@@ -277,6 +280,7 @@ def parse_demo(path: str, steamid: int) -> dict:
                         info["clutch_vs"] = len(enemies_alive)
                 if victim == target:
                     info["died"] = True
+                    info["death_spot"] = row.get("victim_spot")
                     if live:
                         info["died_live"] = True
                         death_tick = row["tick"]
@@ -731,6 +735,27 @@ def _grenades(parser, events, windows, round_teams, names, steamid) -> list[dict
             "duck": bool(now.get("ducking")), "speed": round(speed), "land": land, "flight": flight,
         })
     return result
+
+
+def _add_death_spots(parser, deaths: list[dict]) -> None:
+    """Dónde estaban el que mató y el que murió en cada muerte (X, Y del juego), para el mapa de calor."""
+    try:
+        rows = _records(parser.parse_event("player_death", player=["X", "Y"]))
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return
+    spots = {}
+    for row in rows:
+        def point(prefix: str):
+            x, y = row.get(f"{prefix}_X"), row.get(f"{prefix}_Y")
+            if x is None or y is None or x != x or y != y:   # NaN si no hay jugador (muerte por caída)
+                return None
+            return [round(float(x)), round(float(y))]
+        spots[(row["tick"], sid(row.get("user_steamid")))] = (point("attacker"), point("user"))
+    for row in deaths:
+        killer, victim = spots.get((row["tick"], sid(row.get("user_steamid"))), (None, None))
+        row["killer_spot"], row["victim_spot"] = killer, victim
 
 
 def _position_grid(parser, windows) -> list[list]:

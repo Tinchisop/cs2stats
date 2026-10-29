@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+import math
+
+from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from ..i18n import t
 from ..assets import avatar_path, map_image, weapon_icon
+from .motion import Growing
 from .theme import ACCENT, GOOD, MUTED, TEXT, fmt_num, fmt_pct, rating_color, score_color
 
 _svg_cache: dict[tuple, QPixmap] = {}
@@ -200,13 +203,26 @@ class PremierBadge(QWidget):
         painter.drawText(QPointF(x, baseline), tail)
 
 
-class MapCard(QWidget):
-    """Tarjeta de mapa con la foto oficial de CS2 de fondo, como en la referencia."""
+class MapCard(Growing, QWidget):
+    """Tarjeta de mapa con la foto oficial de CS2 de fondo. Al pasar el mouse la foto se acerca y el borde brilla;
+    al tocarla suena la música del mapa (con un ecualizador en la esquina mientras suena)."""
 
     clicked = Signal(str)
+    grow_ms = 1000
 
     def __init__(self, map_name: str, title: str, parent=None):
         super().__init__(parent)
+        self.hover = 0.0
+        self.playing = False
+        self.phase = 0.0
+        self.zoom = QVariantAnimation(self)
+        self.zoom.setDuration(260)
+        self.zoom.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.zoom.valueChanged.connect(self._zoom_step)
+        self.beat = QTimer(self)
+        self.beat.setInterval(33)
+        self.beat.timeout.connect(self._beat)
+        self.setToolTip(t("Clic para escuchar la música del mapa"))
         self.map_name, self.title = map_name, title
         self.win_rate: float | None = None
         self.games = 0
@@ -223,8 +239,42 @@ class MapCard(QWidget):
         self.games, self.win_rate, self.rating, self.extra = games, win_rate, rating, extra
         self.update()
 
+    def set_playing(self, playing: bool) -> None:
+        self.playing = playing
+        if playing:
+            self.beat.start()
+        else:
+            self.beat.stop()
+        self.update()
+
+    def _beat(self) -> None:
+        self.phase += 0.17
+        self.update()
+
+    def _zoom_step(self, value: float) -> None:
+        self.hover = value
+        self.update()
+
+    def _animate_hover(self, target: float) -> None:
+        self.zoom.stop()
+        self.zoom.setStartValue(self.hover)
+        self.zoom.setEndValue(target)
+        self.zoom.start()
+
+    def enterEvent(self, event):  # noqa: N802
+        self._animate_hover(1.0)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self._animate_hover(0.0)
+        super().leaveEvent(event)
+
     def mousePressEvent(self, _event):  # noqa: N802
         self.clicked.emit(self.map_name)
+
+    def resizeEvent(self, event):  # noqa: N802
+        self._cover = None
+        super().resizeEvent(event)
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
@@ -236,17 +286,24 @@ class MapCard(QWidget):
         painter.setClipPath(clip)
         painter.fillRect(rect, QColor("#151920"))
         if not self.image.isNull():
-            scaled = self.image.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                                       Qt.TransformationMode.SmoothTransformation)
-            painter.drawPixmap(int((self.width() - scaled.width()) / 2), int((self.height() - scaled.height()) / 2), scaled)
+            if getattr(self, "_cover", None) is None or self._cover.size() != self.size() * 1.1:
+                self._cover = self.image.scaled(self.size() * 1.1, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                                Qt.TransformationMode.SmoothTransformation)
+            scale = (1.0 + 0.08 * self.hover) / 1.1
+            w, h = self._cover.width() * scale, self._cover.height() * scale
+            painter.drawPixmap(QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h), self._cover,
+                               QRectF(self._cover.rect()))
         shade = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        shade.setColorAt(0, QColor(10, 14, 22, 150))
-        shade.setColorAt(0.6, QColor(10, 14, 22, 205))
+        shade.setColorAt(0, QColor(10, 14, 22, int(150 - 50 * self.hover)))
+        shade.setColorAt(0.6, QColor(10, 14, 22, int(205 - 40 * self.hover)))
         shade.setColorAt(1, QColor(10, 14, 22, 235))
         painter.fillRect(rect, shade)
         painter.setClipping(False)
-        border = QColor(ACCENT) if self.selected else QColor(255, 255, 255, 34)
-        painter.setPen(QPen(border, 2 if self.selected else 1))
+        lit = self.selected or self.playing
+        border = QColor(ACCENT) if lit else QColor(255, 255, 255, 34 + int(150 * self.hover))
+        if not lit and self.hover:
+            border = QColor(34, 211, 166, int(40 + 180 * self.hover))
+        painter.setPen(QPen(border, 2 if lit else 1 + self.hover))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(rect, 14, 14)
 
@@ -275,7 +332,7 @@ class MapCard(QWidget):
             fill = QLinearGradient(track.topLeft(), track.topRight())
             fill.setColorAt(0, QColor("#b6d96a")); fill.setColorAt(1, QColor(GOOD))
             painter.setBrush(fill)
-            painter.drawRoundedRect(QRectF(track.left(), track.top(), track.width() * self.win_rate, 6), 3, 3)
+            painter.drawRoundedRect(QRectF(track.left(), track.top(), track.width() * self.win_rate * self.grow, 6), 3, 3)
             painter.setBrush(QColor(TEXT))
             painter.drawRect(QRectF(track.left() + track.width() * 0.5 - 1, track.top() - 3, 2, 12))
         painter.setPen(QColor(MUTED))
@@ -289,21 +346,52 @@ class MapCard(QWidget):
             painter.setFont(QFont("Segoe UI", 9))
             painter.drawText(QRectF(pad + 150, 116, rect.width() - pad * 2 - 150, 40),
                              Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, self.extra)
+        # Música: ecualizador cuando suena, nota cuando el mouse está encima.
+        if self.playing or self.hover > 0.05:
+            box = QRectF(rect.right() - 112, 18, 26, 22)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(34, 211, 166, 60 if self.playing else int(40 * self.hover)))
+            painter.drawRoundedRect(box.adjusted(-4, -2, 4, 2), 7, 7)
+            painter.setBrush(QColor(ACCENT) if self.playing else QColor(255, 255, 255, int(200 * self.hover)))
+            for index in range(4):
+                level = 0.3 + 0.7 * abs(math.sin(self.phase * (1 + index * 0.37) + index)) if self.playing else 0.25 + 0.15 * index
+                h = 16 * level
+                painter.drawRoundedRect(QRectF(box.left() + 3 + index * 5.5, box.bottom() - 3 - h, 3.2, h), 1.2, 1.2)
 
 
-class WeaponRow(QWidget):
-    """Silueta del arma + nombre + barra de kills, como el HUD del juego."""
+class WeaponRow(Growing, QWidget):
+    """Silueta del arma + nombre + barra de kills, como el HUD del juego. La barra crece al aparecer
+    y la fila se ilumina al pasar el mouse."""
 
-    def __init__(self, weapon: str, label_text: str, kills: int, top: int, note: str, parent=None):
+    grow_ms = 1000
+
+    def __init__(self, weapon: str, label_text: str, kills: int, top: int, note: str, parent=None, order: int = 0):
         super().__init__(parent)
         self.icon = svg_pixmap(weapon_icon(weapon), ACCENT, QSize(92, 30))
+        self.icon_hot = svg_pixmap(weapon_icon(weapon), "#ffffff", QSize(92, 30))
         self.label_text, self.kills, self.top, self.note = label_text, kills, max(1, top), note
+        self.grow_delay = order * 60
+        self.hot = False
         self.setFixedHeight(44)
+
+    def enterEvent(self, event):  # noqa: N802
+        self.hot = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self.hot = False
+        self.update()
+        super().leaveEvent(event)
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.drawPixmap(0, 7, self.icon)
+        if self.hot:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(34, 211, 166, 22))
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(-6, 1, 6, -1), 8, 8)
+        painter.drawPixmap(0, 7, self.icon_hot if self.hot else self.icon)
         painter.setPen(QColor(TEXT))
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         painter.drawText(QRectF(104, 0, 130, 44), Qt.AlignmentFlag.AlignVCenter, self.label_text)
@@ -313,9 +401,9 @@ class WeaponRow(QWidget):
         painter.setBrush(QColor("#262a31"))
         painter.drawRoundedRect(track, 4, 4)
         fill = QLinearGradient(track.topLeft(), track.topRight())
-        fill.setColorAt(0, QColor("#ff6b8f")); fill.setColorAt(1, QColor(ACCENT))
+        fill.setColorAt(0, QColor("#6ff0cc")); fill.setColorAt(1, QColor(ACCENT))
         painter.setBrush(fill)
-        painter.drawRoundedRect(QRectF(track.left(), track.top(), max(6, track.width() * self.kills / self.top), 8), 4, 4)
+        painter.drawRoundedRect(QRectF(track.left(), track.top(), max(6, track.width() * self.kills / self.top * self.grow), 8), 4, 4)
         painter.setPen(QColor(TEXT))
         painter.setFont(QFont("Segoe UI Variable Display", 12, QFont.Weight.Bold))
         painter.drawText(QRectF(track.right() + 10, 0, 50, 44), Qt.AlignmentFlag.AlignVCenter, str(self.kills))

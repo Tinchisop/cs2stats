@@ -103,6 +103,116 @@ def extract_game_assets(force: bool = False) -> bool:
     return True
 
 
+# Música de cada mapa: la radio o la música que suena dentro del mapa; si no hay, el fondo del menú de ese mapa.
+MUSIC_VERSION = "1"
+MAP_MUSIC = {
+    "de_anubis": ["ambient/anubis/anubis_music", "ui/panorama/bg_anubis_01"],
+    "de_inferno": ["ambient/inferno/church_music_upper", "ambient/inferno/inferno_radio_01", "ui/panorama/bg_inferno_01"],
+    "de_nuke": ["ambient/nuke/truck_music", "ui/panorama/bg_nuke_01"],
+    "de_train": ["ambient/train/music_de_train_radio", "ambient/de_train_radio", "ui/panorama/bg_train_01"],
+    "de_overpass": ["ambient/techno_overpass", "ui/panorama/bg_overpass_01"],
+    "de_dust2": ["ambient/dust2/music_attribution_01", "ui/panorama/bg_dust2_01"],
+    "de_cache": ["ambient/cache/cache_music_pop", "ui/panorama/bg_cache_01"],
+    "de_mirage": ["ambient/mirame_radio_thru_wall", "ambient/latin", "ui/panorama/bg_mirage_01"],
+    "de_ancient": ["ambient/aztec2/aztec_music_flute", "ui/panorama/bg_ancient_day_01"],
+    "de_vertigo": ["ui/panorama/bg_vertigo_01"],
+    "de_italy": ["ui/panorama/bg_italy_01"],
+    "de_office": ["ui/panorama/bg_office_01"],
+}
+MENU_MUSIC = "music/valve_cs2_01/mainmenu"   # para mapas sin música propia
+RATES = (11025, 16000, 22050, 24000, 32000, 44100, 48000)
+
+
+def music_dir() -> Path:
+    folder = assets_dir() / "musica"
+    folder.mkdir(exist_ok=True)
+    return folder
+
+
+def map_music(map_name: str) -> Path | None:
+    """Archivo de música ya sacado del juego para el mapa (o la del menú si el mapa no tiene)."""
+    name = map_name if map_name.startswith("de_") else "de_" + map_name.lower().replace(" ii", "2").replace(" ", "")
+    for stem in (name, "menu"):
+        for ext in ("mp3", "wav"):
+            path = music_dir() / f"{stem}.{ext}"
+            if path.exists():
+                return path
+    return None
+
+
+def vsnd_audio(data: bytes) -> tuple[str, bytes] | None:
+    """Audio de un .vsnd_c de Source 2: ("mp3", datos) o ("wav", datos con cabecera RIFF).
+
+    El sonido va después de la cabecera del recurso; el bloque DATA dice frecuencia, formato (0 PCM de 16 bits,
+    1 PCM de 8 bits, 2 MP3) y canales en un mismo entero."""
+    import struct
+    if len(data) < 16:
+        return None
+    header = struct.unpack_from("<I", data, 0)[0]
+    block_offset, block_count = struct.unpack_from("<II", data, 8)
+    info = b""
+    for index in range(block_count):
+        pos = 8 + block_offset + index * 12
+        if data[pos:pos + 4] == b"DATA":
+            offset, size = struct.unpack_from("<II", data, pos + 4)
+            info = data[pos + 4 + offset:pos + 4 + offset + size]
+    audio = data[header:]
+    for at in range(0, len(info) - 3, 4):
+        value = struct.unpack_from("<I", info, at)[0]
+        rate, kind, channels = value & 0xFFFF, (value >> 16) & 0xFF, value >> 24
+        if rate not in RATES or kind not in (0, 1, 2) or channels not in (1, 2):
+            continue
+        if kind == 2:
+            return "mp3", audio
+        bits = 16 if kind == 0 else 8
+        block = channels * bits // 8
+        audio = audio[:len(audio) - len(audio) % block]
+        head = struct.pack("<4sI4s4sIHHIIHH4sI", b"RIFF", 36 + len(audio), b"WAVE", b"fmt ", 16, 1, channels, rate,
+                           rate * block, block, bits, b"data", len(audio))
+        return "wav", head + audio
+    # Formato nuevo: los datos van en un bloque CTRL (KV3); si el sonido arranca con un cuadro MP3, alcanza.
+    if len(audio) > 4 and audio[0] == 0xFF and audio[1] & 0xE0 == 0xE0:
+        return "mp3", audio
+    return None
+
+
+def extract_map_music(force: bool = False) -> bool:
+    """Saca del juego (solo lectura) la música de cada mapa. Devuelve True si quedó lista."""
+    folder = music_dir()
+    marker = folder / "version.txt"
+    if not force and marker.exists() and marker.read_text() == MUSIC_VERSION:
+        return True
+    game = cs2_game_dir()
+    if not game or not (game / "pak01_dir.vpk").exists():
+        return False
+    import vpk
+    pak = vpk.open(str(game / "pak01_dir.vpk"))
+
+    def save(stem: str, sources: list[str]) -> None:
+        for source in sources:
+            try:
+                found = vsnd_audio(pak.get_file(f"sounds/{source}.vsnd_c").read())
+            except (KeyError, OSError, ValueError):
+                continue
+            if found:
+                kind, audio = found
+                for old in folder.glob(f"{stem}.*"):
+                    old.unlink()
+                (folder / f"{stem}.{kind}").write_bytes(audio)
+                return
+    for map_name, sources in MAP_MUSIC.items():
+        save(map_name, sources)
+    save("menu", [MENU_MUSIC])
+    marker.write_text(MUSIC_VERSION)
+    log.info("Música de los mapas extraída")
+    return True
+
+
+def map_icon(map_name: str) -> Path | None:
+    path = assets_dir() / "mapas" / f"{map_name}_icono.svg"
+    return path if path.exists() else None
+
+
 AVATAR_MAX_AGE = 7 * 86400   # las fotos de los demás jugadores se vuelven a bajar una vez por semana
 
 

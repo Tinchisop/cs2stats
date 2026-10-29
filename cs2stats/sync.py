@@ -187,8 +187,11 @@ def complete_details(store: Store, settings: Settings, log: Callable[[str], None
     Usa la demo si sigue en la PC; si no, la vuelve a bajar de Valve mientras exista. Si ya no está, queda marcada."""
     done = 0
     for match in reversed(store.matches(settings["steamid"])):
-        # Falta el detalle, o se completó antes de que la app guardara el MVP de cada ronda ({} = sin demo, no se reintenta).
-        if match["detail"] is not None and not (match["detail"] and match["rounds"] and "mvp" not in match["rounds"][0]):
+        # Falta el detalle, o se completó antes de que la app guardara el MVP de cada ronda ({} = sin demo, no se reintenta),
+        # o faltan las posiciones de las kills y muertes para el mapa de calor.
+        needs_detail = match["detail"] is None or bool(match["detail"] and match["rounds"] and "mvp" not in match["rounds"][0])
+        needs_spots = bool(match["rounds"]) and "kill_spots" not in match["rounds"][0]
+        if not (needs_detail or needs_spots):
             continue
         if done >= limit:
             break
@@ -214,7 +217,11 @@ def complete_details(store: Store, settings: Settings, log: Callable[[str], None
                         remove_quietly(demo)
         except DemoError as error:
             log(str(error))
-        store.refresh_match(match["id"], fresh if fresh and fresh["match_key"] == match["match_key"] else None)
+        fresh = fresh if fresh and fresh["match_key"] == match["match_key"] else None
+        if fresh or needs_detail:
+            store.refresh_match(match["id"], fresh)
+        else:
+            store.mark_no_spots(match["id"])   # sin demo: el detalle que ya tenía se conserva
         done += 1
     return done
 

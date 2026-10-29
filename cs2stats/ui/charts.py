@@ -5,11 +5,11 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from ..i18n import t
-from .motion import Growing
+from .motion import Growing, Hovering, stagger
 from .theme import ACCENT, BAD, CT_COLOR, GOOD, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num, icon, rating_color, score_color
 
 
@@ -36,11 +36,14 @@ def smooth_path(points: list[QPointF]) -> QPainterPath:
     return path
 
 
-class PercentileBar(QWidget):
+class PercentileBar(Growing, QWidget):
     """Barra 0 a 100: dónde quedás entre los jugadores de referencia. La marca del medio es el promedio."""
 
-    def __init__(self, parent=None):
+    grow_ms = 1000
+
+    def __init__(self, parent=None, marker: bool = True):
         super().__init__(parent)
+        self.marker = marker
         self.score: float | None = None
         self.setFixedHeight(10)
         self.setMinimumWidth(120)
@@ -57,11 +60,26 @@ class PercentileBar(QWidget):
         painter.setBrush(QColor("#25282f"))
         painter.drawRoundedRect(rect, 3, 3)
         if self.score is not None:
-            fill = QRectF(rect.left(), rect.top(), max(4.0, rect.width() * self.score / 100), rect.height())
-            painter.setBrush(QColor(score_color(self.score)))
+            fill = QRectF(rect.left(), rect.top(), max(4.0, rect.width() * self.score / 100 * self.grow), rect.height())
+            color = QColor(score_color(self.score))
+            gradient = QLinearGradient(fill.topLeft(), fill.topRight())
+            faded = QColor(color)
+            faded.setAlpha(150)
+            gradient.setColorAt(0, faded)
+            gradient.setColorAt(1, color)
+            painter.setBrush(gradient)
             painter.drawRoundedRect(fill, 3, 3)
-        painter.setBrush(QColor("#8b919d"))
-        painter.drawRect(QRectF(rect.center().x() - 0.75, 0, 1.5, 10))
+            # Brillo en la punta de la barra.
+            tip = QRadialGradient(QPointF(fill.right() - 2, fill.center().y()), 7)
+            color.setAlpha(150)
+            tip.setColorAt(0, color)
+            color.setAlpha(0)
+            tip.setColorAt(1, color)
+            painter.setBrush(tip)
+            painter.drawEllipse(QPointF(fill.right() - 2, fill.center().y()), 7, 7)
+        if self.marker:
+            painter.setBrush(QColor("#8b919d"))
+            painter.drawRect(QRectF(rect.center().x() - 0.75, 0, 1.5, 10))
 
 
 class MatchPills(QWidget):
@@ -121,11 +139,15 @@ class MatchPills(QWidget):
                 return
 
 
-class TrendChart(QWidget):
-    """Evolución partida por partida: línea, puntos verdes (victoria) o rojos (derrota) y promedio punteado."""
+class TrendChart(Growing, QWidget):
+    """Evolución partida por partida: línea, puntos verdes (victoria) o rojos (derrota) y promedio punteado.
+    La línea se dibuja de izquierda a derecha y el punto bajo el mouse se marca con una guía."""
+
+    grow_ms = 1100
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.hover_x: float | None = None
         self.points: list[dict] = []   # {"value", "label", "won", "tip"}
         self.average: float | None = None
         self.reference: float | None = None
@@ -133,15 +155,21 @@ class TrendChart(QWidget):
         self.decimals = 2
         self.suffix = ""
         self.color = ACCENT
+        self.forecast: list[float] = []      # valores esperados de las próximas partidas (línea punteada)
+        self.band: tuple[float, float] | None = None
         self._hits: list[tuple[QPointF, str]] = []
         self.setMinimumHeight(220)
         self.setMouseTracking(True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def set_data(self, points: list[dict], average=None, reference=None, reference_label: str = "",
-                 decimals: int = 2, suffix: str = "", color: str = ACCENT) -> None:
+                 decimals: int = 2, suffix: str = "", color: str = ACCENT, forecast: list[float] | None = None,
+                 band: tuple[float, float] | None = None) -> None:
+        self.forecast, self.band = forecast or [], band
         self.points, self.average, self.reference, self.reference_label = points, average, reference, reference_label
         self.decimals, self.suffix, self.color = decimals, suffix, color
+        if self.isVisible():
+            self.start_grow()
         self.update()
 
     def _fmt(self, value: float) -> str:
@@ -158,7 +186,7 @@ class TrendChart(QWidget):
             painter.setPen(QColor(MUTED))
             painter.drawText(area, Qt.AlignmentFlag.AlignCenter, t("Sin datos todavía"))
             return
-        refs = values + [v for v in (self.average, self.reference) if v is not None]
+        refs = values + [v for v in (self.average, self.reference) if v is not None] + self.forecast + list(self.band or ())
         low, high = min(refs), max(refs)
         pad = max((high - low) * 0.15, abs(high) * 0.05, 0.05)
         low, high = low - pad, high + pad
@@ -176,9 +204,10 @@ class TrendChart(QWidget):
             painter.setPen(QColor(SUBTLE))
             painter.drawText(QRectF(0, y - 8, 46, 16), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self._fmt(value))
         n = len(self.points)
+        slots = n + len(self.forecast)
 
         def x_of(i: int) -> float:
-            return area.center().x() if n == 1 else area.left() + i * area.width() / (n - 1)
+            return area.center().x() if slots == 1 else area.left() + i * area.width() / (slots - 1)
 
         for value, color, text in ((self.average, MUTED, t('Tu promedio {0}').format(self._fmt(self.average) if self.average is not None else '')),
                                    (self.reference, CT_COLOR, f"{self.reference_label} {self._fmt(self.reference) if self.reference is not None else ''}")):
@@ -192,6 +221,9 @@ class TrendChart(QWidget):
 
         mapped = [(i, QPointF(x_of(i), y_of(p["value"])), p) for i, p in enumerate(self.points) if p["value"] is not None]
         line = [q for _, q, _ in mapped]
+        painter.save()
+        reach = area.left() - 8 + (area.width() + 16) * self.grow
+        painter.setClipRect(QRectF(0, 0, reach, self.height()))
         if len(line) > 1:
             path = smooth_path(line)
             shade = QPainterPath(path)
@@ -200,14 +232,54 @@ class TrendChart(QWidget):
             top = QColor(self.color); top.setAlpha(45); bottom = QColor(self.color); bottom.setAlpha(0)
             gradient.setColorAt(0, top); gradient.setColorAt(1, bottom)
             painter.fillPath(shade, gradient)
-            painter.setPen(QPen(QColor(self.color), 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            halo = QColor(self.color)
+            halo.setAlpha(50)
+            painter.setPen(QPen(halo, 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             painter.drawPath(path)
+            painter.setPen(QPen(QColor(self.color), 2.4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawPath(path)
+        if self.forecast and line:
+            # Pronóstico: cono con el margen y línea punteada desde la última partida.
+            last = line[-1]
+            ahead = [QPointF(x_of(n + i), y_of(v)) for i, v in enumerate(self.forecast)]
+            if self.band:
+                low_end, high_end = QPointF(ahead[-1].x(), y_of(self.band[0])), QPointF(ahead[-1].x(), y_of(self.band[1]))
+                cone = QPainterPath(last)
+                cone.lineTo(high_end)
+                cone.lineTo(low_end)
+                cone.closeSubpath()
+                tint = QColor(self.color)
+                tint.setAlpha(34)
+                painter.fillPath(cone, tint)
+            painter.setPen(QPen(QColor(self.color), 2, Qt.PenStyle.DashLine, Qt.PenCapStyle.RoundCap))
+            painter.drawPolyline([last] + ahead)
+            painter.setPen(QPen(QColor("#0c0f13"), 2))
+            painter.setBrush(QColor(self.color))
+            painter.drawEllipse(ahead[-1], 5, 5)
+            painter.setPen(QColor(self.color))
+            painter.drawText(QRectF(ahead[-1].x() - 120, ahead[-1].y() - 24, 116, 16), Qt.AlignmentFlag.AlignRight,
+                             t("~{0} en {1} partidas").format(self._fmt(self.forecast[-1]), len(self.forecast)))
+        painter.restore()
+        hovered = None
+        if self.hover_x is not None and mapped:
+            hovered = min(mapped, key=lambda m: abs(m[1].x() - self.hover_x))
+            painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.PenStyle.DashLine))
+            painter.drawLine(QPointF(hovered[1].x(), area.top()), QPointF(hovered[1].x(), area.bottom()))
         label_every = max(1, n // 8)
         for i, point, data in mapped:
+            if point.x() > reach:
+                continue
             color = QColor(GOOD if data.get("won") else BAD if data.get("won") is False else MUTED)
-            painter.setPen(QPen(QColor("#0f1014"), 2))
+            big = hovered is not None and hovered[0] == i
+            if big:
+                ring = QColor(color)
+                ring.setAlpha(70)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(ring)
+                painter.drawEllipse(point, 11, 11)
+            painter.setPen(QPen(QColor("#0c0f13"), 2))
             painter.setBrush(color)
-            painter.drawEllipse(point, 4.5, 4.5)
+            painter.drawEllipse(point, 6.5 if big else 4.5, 6.5 if big else 4.5)
             self._hits.append((point, data.get("tip", "")))
             if i % label_every == 0 or i == n - 1:
                 painter.setPen(QColor(SUBTLE))
@@ -215,15 +287,24 @@ class TrendChart(QWidget):
 
     def mouseMoveEvent(self, event):  # noqa: N802
         pos = event.position()
-        best = min(self._hits, key=lambda h: (h[0].x() - pos.x()) ** 2 + (h[0].y() - pos.y()) ** 2, default=None)
-        if best and abs(best[0].x() - pos.x()) < 18 and best[1]:
+        best = min(self._hits, key=lambda h: abs(h[0].x() - pos.x()), default=None)
+        self.hover_x = pos.x() if best else None
+        self.update()
+        if best and best[1]:
             QToolTip.showText(event.globalPosition().toPoint(), best[1], self)
         else:
             QToolTip.hideText()
 
+    def leaveEvent(self, event):  # noqa: N802
+        self.hover_x = None
+        self.update()
+        super().leaveEvent(event)
 
-class ColumnChart(QWidget):
-    """Columnas por mes: alto = partidas, color = porcentaje de victorias."""
+
+class ColumnChart(Growing, Hovering, QWidget):
+    """Columnas por mes: alto = partidas, color = porcentaje de victorias. Crecen una tras otra al aparecer."""
+
+    grow_ms = 1100
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -231,6 +312,7 @@ class ColumnChart(QWidget):
         self._cells: list[tuple[QRectF, str]] = []
         self.setMinimumHeight(190)
         self.setMouseTracking(True)
+        self.init_hover()
 
     def set_items(self, items: list[dict]) -> None:
         self.items = items
@@ -251,26 +333,44 @@ class ColumnChart(QWidget):
         width = min(34.0, slot * 0.7)
         painter.setFont(QFont("Segoe UI", 8))
         for index, item in enumerate(self.items):
-            h = max(3.0, area.height() * item["value"] / top)
-            rect = QRectF(area.left() + index * slot + (slot - width) / 2, area.bottom() - h, width, h)
+            full = max(3.0, area.height() * item["value"] / top)
+            h = max(1.0, full * stagger(self.grow, index, n, 0.6))
+            hover = self.hover.get(index, 0.0)
+            rect = QRectF(area.left() + index * slot + (slot - width) / 2 - hover * 2, area.bottom() - h, width + hover * 4, h)
             rate = item.get("rate")
+            color = QColor(score_color(rate * 100 if rate is not None else None))
+            fill = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+            fill.setColorAt(0, color.lighter(100 + int(25 * hover)))
+            bottom = QColor(color)
+            bottom.setAlpha(90)
+            fill.setColorAt(1, bottom)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(score_color(rate * 100 if rate is not None else None)))
+            painter.setBrush(fill)
             painter.drawRoundedRect(rect, 4, 4)
+            if hover:
+                painter.setPen(QColor(TEXT))
+                painter.drawText(QRectF(rect.center().x() - 30, rect.top() - 18, 60, 14), Qt.AlignmentFlag.AlignHCenter,
+                                 str(item["value"]))
             if n <= 16 or index % max(1, n // 12) == 0:
                 painter.setPen(QColor(SUBTLE))
                 painter.drawText(QRectF(rect.center().x() - 30, area.bottom() + 6, 60, 14), Qt.AlignmentFlag.AlignHCenter, item["label"])
             self._cells.append((rect.adjusted(-3, -area.height(), 3, 0), item.get("tip", "")))
 
     def mouseMoveEvent(self, event):  # noqa: N802
-        for rect, tip in self._cells:
+        for index, (rect, tip) in enumerate(self._cells):
             if rect.contains(event.position()):
+                self.set_hover(index)
                 QToolTip.showText(event.globalPosition().toPoint(), tip, self)
                 return
+        self.set_hover(None)
         QToolTip.hideText()
 
+    def leaveEvent(self, event):  # noqa: N802
+        self.set_hover(None)
+        super().leaveEvent(event)
 
-class BarList(QWidget):
+
+class BarList(Growing, QWidget):
     """Barras horizontales con nombre, valor y una nota a la derecha."""
 
     ROW = 34
@@ -308,8 +408,15 @@ class BarList(QWidget):
             track = QRectF(bar_left, y + 9, bar_w, 8)
             painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor("#25282f"))
             painter.drawRoundedRect(track, 4, 4)
-            fill = QRectF(track.left(), track.top(), max(5, track.width() * min(1.0, row["value"] / top)), track.height())
-            painter.setBrush(QColor(row.get("color", ACCENT)))
+            grow = stagger(self.grow, index, len(self.rows))
+            fill = QRectF(track.left(), track.top(), max(5, track.width() * min(1.0, row["value"] / top) * grow), track.height())
+            color = QColor(row.get("color", ACCENT))
+            gradient = QLinearGradient(fill.topLeft(), fill.topRight())
+            faded = QColor(color)
+            faded.setAlpha(130)
+            gradient.setColorAt(0, faded)
+            gradient.setColorAt(1, color)
+            painter.setBrush(gradient)
             painter.drawRoundedRect(fill, 4, 4)
             painter.setFont(QFont("Segoe UI Variable Display", 11, QFont.Weight.Bold))
             painter.setPen(QColor(TEXT))
@@ -320,7 +427,7 @@ class BarList(QWidget):
                              row.get("note", ""))
 
 
-class SideCompare(QWidget):
+class SideCompare(Growing, QWidget):
     """CT contra T, métrica por métrica, con dos barras enfrentadas."""
 
     ROW = 40
@@ -353,7 +460,8 @@ class SideCompare(QWidget):
             painter.drawText(QRectF(mid - 80, y, 160, 24), Qt.AlignmentFlag.AlignCenter, row["label"])
             top = row.get("scale") or max(row["ct"] or 0, row["t"] or 0) or 1
             for side, value, text, color in (("ct", row["ct"], row["ct_text"], CT_COLOR), ("t", row["t"], row["t_text"], T_COLOR)):
-                length = max(4, half * 0.78 * min(1.0, (value or 0) / top)) if value is not None else 0
+                length = (max(4, half * 0.78 * min(1.0, (value or 0) / top) * stagger(self.grow, index, len(self.rows)))
+                          if value is not None else 0)
                 rect = QRectF(mid - 84 - length, y + 8, length, 8) if side == "ct" else QRectF(mid + 84, y + 8, length, 8)
                 painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor(color))
                 painter.drawRoundedRect(rect, 4, 4)

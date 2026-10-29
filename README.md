@@ -18,6 +18,10 @@ Everything runs on your PC with official Valve tools. It never reads or touches 
 * **Tips** written from your own numbers, with how confident each one is.
 * **Lineups:** the best known smokes, molotovs and flashes for Mirage, Dust II, Inferno, Ancient, Anubis, Nuke and Cache, each one tested in CS2. Every lineup has a clip recorded in game in three parts (where to stand, where to aim, how it lands), step by step instructions and how many times it was thrown in your matches. Click the clip to watch it full screen.
 * **Steam message after every match:** your secondary account sends you a chat message, like a friend, with your best moments (multi-kills, clutches, ADR records).
+* **Heat map** of where you kill and where you die on each map, with the zones that repeat the most.
+* **You and your friends:** head to head against the teammates you play with the most, in the same matches.
+* **Achievements and goals:** 20 medals (ace, clutches, streaks, Premier colors…), your own goals with progress bars and a Premier forecast for your next 10 matches.
+* **Map music:** each map's song, taken from your CS2 files, plays when you open a match or tap a map, plus a map radio with volume control.
 * **Spanish and English.** Pick the language at the bottom of the sidebar.
 
 | Tips | Matches |

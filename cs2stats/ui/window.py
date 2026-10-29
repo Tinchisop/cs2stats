@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QEvent, QObject, QPropertyAnimation, QRect, QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QMainWindow,
                                QMenu, QMessageBox, QPushButton, QStackedWidget, QSystemTrayIcon, QVBoxLayout, QWidget)
 
@@ -23,16 +23,22 @@ from ..store import PARSER_VERSION, Settings, Store, data_dir
 from ..i18n import LANGUAGES, language, t
 from ..resumen import match_message
 from ..sync import reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
-from ..assets import avatar_path, download_avatar, download_player_avatars, extract_game_assets
+from ..assets import (MAP_MUSIC, avatar_path, download_avatar, download_player_avatars, extract_game_assets,
+                      extract_map_music, map_music)
+from ..nades import MapGrid
 from ..nades import build_lineups
 from ..recorder import RecorderError, cs2_running, ffmpeg_path, launch_practice, record_lineups
 from .connect import ConnectPage, DemosPage, LoginDialog
 from .match import MatchView
-from .motion import reveal
+from .hud import CoachBot
+from .motion import cascade, reveal
 from .nades_page import NadesPage
 from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchesPage, ProfilePage, RankPage, UtilityPage,
                     WeaponsPage)
-from .theme import BAD, GOOD, MUTED, STYLE, app_icon, fmt_num, icon, label
+from .radio import MusicButton, MusicPanel
+from .social import AchievementsPage, FriendsPage
+from .sound import MapMusic
+from .theme import ACCENT, BAD, GOOD, MUTED, STYLE, app_icon, fmt_num, icon, label, panel
 
 RUN_KEY = t(r"Software\Microsoft\Windows\CurrentVersion\Run")
 RUN_NAME = t("CS2 Stats")
@@ -209,13 +215,14 @@ class MainWindow(QMainWindow):
     NAV = [(t("ESTADÍSTICAS"), None, None), ("perfil", t("Perfil"), "profile"), ("partidas", t("Partidas"), "list"),
            ("rango", t("Tu rango"), "rank"), ("mapas", t("Mapas"), "map"), ("latas", t("Latas"), "grenade"),
            ("armas", t("Armas"), "target"),
-           ("utilidad", t("Utilidad y plata"), "bolt"), ("consejos", t("Consejos"), "bulb"), ("historial", t("Historial"), "history"),
+           ("utilidad", t("Utilidad y plata"), "bolt"), ("consejos", t("Consejos"), "bulb"), ("amigos", t("Amigos"), "friends"),
+           ("logros", t("Logros y metas"), "medal"), ("historial", t("Historial"), "history"),
            (t("CUENTA"), None, None), ("conectar", t("Conectar Steam"), "link"), ("demos", t("Demos y aviso"), "import"),
            ("ayuda", t("Cómo usar"), "help")]
     TITLES = {"perfil": t("Perfil"), "partidas": t("Partidas"), "rango": t("Comparación con tu rango"), "mapas": t("Mapas"),
               "latas": t("Latas"),
               "armas": t("Armas"), "utilidad": t("Utilidad y plata"), "consejos": t("Consejos para mejorar"),
-              "historial": t("Historial completo"), "conectar": t("Conectar Steam"), "demos": t("Demos y aviso de fin de partida"),
+              "historial": t("Historial completo"), "amigos": t("Vos y tus amigos"), "logros": t("Logros y metas"), "conectar": t("Conectar Steam"), "demos": t("Demos y aviso de fin de partida"),
               "ayuda": t("Cómo usar CS2 Stats")}
 
     def __init__(self, start_hidden: bool = False):
@@ -271,6 +278,8 @@ class MainWindow(QMainWindow):
         self.title = label(t("Perfil"), "pageTitle")
         header.addWidget(self.title)
         header.addStretch(1)
+        header.addWidget(self._now_playing())
+        header.addSpacing(14)
         header.addWidget(label(t("Modo"), "smallMuted"))
         self.mode = QComboBox()
         self.mode.addItem(t("Todos"), "")
@@ -287,10 +296,17 @@ class MainWindow(QMainWindow):
         content.addWidget(self.header_bar)
         self.match_view: MatchView | None = None
         self.current_page = "perfil"
+        self.music = MapMusic(self)
+        self.music.set_volume(self.settings["music_volume"])
+        self.music.changed.connect(self._music_changed)
+        self.music.ended.connect(self._radio_next)
         self.stack = QStackedWidget()
         self.pages = {"perfil": ProfilePage(), "partidas": MatchesPage(), "rango": RankPage(), "mapas": MapsPage(),
                       "latas": NadesPage(), "armas": WeaponsPage(), "utilidad": UtilityPage(), "consejos": AdvicePage(),
+                      "amigos": FriendsPage(), "logros": AchievementsPage(),
                       "historial": HistoryPage(), "conectar": ConnectPage(), "demos": DemosPage(), "ayuda": HelpPage()}
+        self.pages["logros"].set_goals(self.settings.values.get("goals", []))
+        self.pages["logros"].goals_changed.connect(self._goals_changed)
         for page in self.pages.values():
             self.stack.addWidget(page)
             page.open_match.connect(self.open_match)
@@ -300,6 +316,8 @@ class MainWindow(QMainWindow):
 
         self.pages["perfil"].sync_requested.connect(self.sync_all)
         self.pages["partidas"].delete_requested.connect(self.delete_match)
+        self.pages["partidas"].play_map.connect(self.toggle_music)
+        self.pages["mapas"].play_map.connect(self.toggle_music)
         nades: NadesPage = self.pages["latas"]
         nades.loader = lambda: build_lineups(self.store.nade_data())
         nades.record_requested.connect(self.start_recording)
@@ -349,6 +367,7 @@ class MainWindow(QMainWindow):
         self.steam_timer.start(20 * 60_000)
         self.go("perfil")
         self.refresh()
+        QTimer.singleShot(0, lambda: self._place_indicator(False))
         QTimer.singleShot(400, self.scan)
         QTimer.singleShot(800, self.load_assets)
         QTimer.singleShot(1500, self.start_steam_sync)
@@ -370,6 +389,17 @@ class MainWindow(QMainWindow):
         brand.addWidget(label(t("CS2 Stats"), "brand"), 1)
         layout.addLayout(brand)
         layout.addSpacing(12)
+        # Placa que se desliza detrás del botón elegido (se crea antes que los botones para quedar debajo).
+        self.nav_indicator = panel("navIndicator")
+        self.nav_indicator.setParent(side)
+        bar = panel("navIndicatorBar")
+        bar.setParent(self.nav_indicator)
+        bar.setGeometry(0, 9, 3, 20)
+        self.nav_slide = QPropertyAnimation(self.nav_indicator, b"geometry", self)
+        self.nav_slide.setDuration(340)
+        self.nav_slide.setEasingCurve(QEasingCurve.Type.OutBack)
+        side.installEventFilter(self)
+        self.side = side
         self.nav_group = QButtonGroup(self)
         self.nav: dict[str, QPushButton] = {}
         for key, title, kind in self.NAV:
@@ -395,6 +425,22 @@ class MainWindow(QMainWindow):
                 self.advice_badge.hide()
                 inner.addWidget(self.advice_badge)
         layout.addStretch(1)
+        self.coach = panel("coachCard")
+        coach_row = QHBoxLayout(self.coach)
+        coach_row.setContentsMargins(10, 8, 10, 8)
+        coach_row.setSpacing(8)
+        coach_row.addWidget(CoachBot(42))
+        coach_text = QVBoxLayout()
+        coach_text.setSpacing(4)
+        coach_text.addWidget(label(t("Tu entrenador"), "smallMuted"))
+        coach_button = QPushButton(t("Ver consejos"))
+        coach_button.setObjectName("coachButton")
+        coach_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        coach_button.clicked.connect(lambda: self.go("consejos"))
+        coach_text.addWidget(coach_button)
+        coach_row.addLayout(coach_text, 1)
+        layout.addWidget(self.coach)
+        layout.addSpacing(8)
         status = QFrame()
         status.setObjectName("sideCard")
         status_layout = QVBoxLayout(status)
@@ -423,18 +469,123 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "CS2 Stats", t("El idioma cambia la próxima vez que abras la app.") if code == language()
                                 else EN_RESTART if code == "en" else ES_RESTART)
 
+    def _now_playing(self) -> QWidget:
+        """Botón de música con su panel: radio de mapas, volumen y música en las partidas."""
+        self.radio_on = False
+        self.radio_queue: list[str] = []
+        self.radio_index = 0
+        self.music_button = MusicButton()
+        self.music_panel = MusicPanel(self)
+        self.music_button.clicked.connect(self._open_music_panel)
+        self.music_panel.radio_toggled.connect(self.toggle_radio)
+        self.music_panel.next_track.connect(self.radio_step)
+        self.music_panel.volume_changed.connect(self._volume_changed)
+        self.music_panel.auto_toggled.connect(lambda on: self.settings.set("map_music", on))
+        return self.music_button
+
+    def _open_music_panel(self) -> None:
+        self._sync_music_panel()
+        self.music_panel.open_below(self.music_button)
+
+    def _sync_music_panel(self) -> None:
+        self.music_panel.set_state(self.music.map_name if self.music.playing else "", self.radio_on,
+                                   self.settings["music_volume"], self.settings["map_music"])
+
+    def _volume_changed(self, value: int) -> None:
+        self.music.set_volume(value)
+        self.settings.set("music_volume", value)
+
+    def toggle_radio(self) -> None:
+        """Radio de mapas: pasa por la música de todos los mapas, en orden mezclado."""
+        if self.radio_on:
+            self.radio_on = False
+            self.music.stop()
+        else:
+            import random
+            self.radio_queue = [m for m in MAP_MUSIC if map_music(m) and map_music(m).stem == m]
+            random.shuffle(self.radio_queue)
+            self.radio_index = 0
+            self.radio_on = bool(self.radio_queue)
+            self._radio_play()
+        self._sync_music_panel()
+
+    def radio_step(self, step: int) -> None:
+        if not self.radio_on or not self.radio_queue:
+            return
+        self.radio_index = (self.radio_index + step) % len(self.radio_queue)
+        self._radio_play()
+
+    def _radio_play(self) -> None:
+        if self.radio_on and self.radio_queue:
+            name = self.radio_queue[self.radio_index]
+            self.music.play(name, map_music(name), loop=False)
+
+    def _radio_next(self) -> None:
+        if self.radio_on:
+            self.radio_step(1)
+
+    def _goals_changed(self, goals: list) -> None:
+        self.settings.set("goals", goals)
+        self.refresh()
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        if obj is getattr(self, "side", None) and event.type() == QEvent.Type.Resize:
+            self._place_indicator(False)
+            # En ventanas bajas el robot se esconde para que entre todo el menú.
+            self.coach.setVisible(event.size().height() >= 820)
+        return super().eventFilter(obj, event)
+
+    def _place_indicator(self, animate: bool = True) -> None:
+        btn = self.nav.get(self.current_page)
+        if btn is None:
+            return
+        target = QRect(btn.geometry())
+        if not animate or self.nav_indicator.geometry().isEmpty():
+            self.nav_slide.stop()
+            self.nav_indicator.setGeometry(target)
+        else:
+            self.nav_slide.stop()
+            self.nav_slide.setStartValue(self.nav_indicator.geometry())
+            self.nav_slide.setEndValue(target)
+            self.nav_slide.start()
+        self.nav_indicator.show()
+
+    # Música del mapa
+    def toggle_music(self, map_name: str) -> None:
+        from ..metrics import map_label as _label
+        self.radio_on = False
+        if self.music.playing and _label(self.music.map_name).lower() == _label(map_name).lower():
+            self.music.stop()
+            return
+        self.music.play(map_name, map_music(map_name))
+
+    def _music_changed(self, map_name: str) -> None:
+        self.music_button.set_playing(map_name)
+        self._sync_music_panel()
+        self.pages["mapas"].set_playing(map_name)
+        if self.match_view is not None:
+            self.match_view.set_music(bool(map_name))
+
     def go(self, key: str) -> None:
         for name, btn in self.nav.items():
             btn.setChecked(name == key)
             kind = next(k for n, _t, k in self.NAV if n == name)
-            btn.setIcon(icon(kind, "#eef0f3" if name == key else MUTED, 18))
+            btn.setIcon(icon(kind, ACCENT if name == key else MUTED, 18))
         self.close_match()
         changed = key != self.current_page
         self.current_page = key
+        self._place_indicator()
+        if key not in ("partidas", "mapas") and not self.radio_on:
+            self.music.stop()
         self.stack.setCurrentWidget(self.pages[key])
         self.title.setText(self.TITLES[key])
         if changed:
-            reveal(self.pages[key])
+            reveal(self.title, duration=260)
+            page = self.pages[key]
+            if hasattr(page, "body"):
+                cascade(page.body)
+            else:
+                reveal(page)
         if key == "demos":
             self.refresh_demos()
         if key == "conectar":
@@ -475,7 +626,14 @@ class MainWindow(QMainWindow):
         recent_total = summarize([r for m in recent for r in m["rounds"]])
         comparisons, reference, reference_n = compare(total, samples, premier)
         recent_comparisons, _ref, _n = compare(recent_total, samples, premier)
+        if getattr(self, "_grids_for", None) != len(all_matches):
+            raw: dict[str, list] = {}
+            for map_name, cells in self.store.grids():
+                raw.setdefault(map_name, []).extend(cells)
+            self._grids = {name: MapGrid(cells) for name, cells in raw.items()}
+            self._grids_for = len(all_matches)
         self.view = {
+            "grids": self._grids,
             "all_matches": all_matches, "matches": matches, "recent": recent, "n": n, "total": total,
             "recent_total": recent_total, "insights": analyze(matches), "name": name, "data_dir": str(data_dir()),
             "history": history, "all_history": all_history, "premier": premier, "premier_tier": tier_of(premier),
@@ -629,6 +787,7 @@ class MainWindow(QMainWindow):
 
         def task(_say):
             extract_game_assets()
+            extract_map_music()
             if old_avatar:
                 download_avatar(steamid, key)
             download_player_avatars(others, key)
@@ -759,12 +918,24 @@ class MainWindow(QMainWindow):
         self.close_match()
         view = MatchView(match, None, self.view["all_matches"], t("Volver a {0}").format(self.TITLES[self.current_page]))
         view.back.connect(lambda: self.go(self.current_page))
+        view.music_toggled.connect(self._match_music)
         self.stack.addWidget(view)
         self.match_view = view
         self.header_bar.hide()
         self.stack.setCurrentWidget(view)
         view.setFocus()
         view.animate_in()
+        if self.settings["map_music"] and not self.radio_on:
+            self.music.play(match["map"], map_music(match["map"]))
+        view.set_music(self.music.playing)
+
+    def _match_music(self, on: bool) -> None:
+        self.settings.set("map_music", on)
+        self.radio_on = False
+        if on and self.match_view is not None:
+            self.music.play(self.match_view.map_name, map_music(self.match_view.map_name))
+        elif not on:
+            self.music.stop()
 
     def close_match(self) -> None:
         if self.match_view is not None:
@@ -870,6 +1041,7 @@ class MainWindow(QMainWindow):
         self.assets_runner.stop()
         if self.gsi_server:
             self.gsi_server.stop()
+        self.music.shutdown()
         self.tray.hide()
         QApplication.quit()
         event.accept()

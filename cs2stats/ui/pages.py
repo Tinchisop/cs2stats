@@ -5,20 +5,24 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QFrame, QGridLayout, QHBoxLayout,
                                QHeaderView, QLabel, QMenu, QPushButton, QScrollArea, QSizePolicy, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from ..i18n import t
-from ..benchmarks import BY_KEY, tier_label
+from ..i18n import language, t
+from ..benchmarks import BY_KEY, derived, tier_label
 from ..insights import Insight, analyze
+from ..progress import premier_forecast
 from ..metrics import SOURCE_NAMES, by_key, map_label, summarize, weapon_label
-from .charts import BarList, ColumnChart, MatchPills, PercentileBar, SideCompare, TrendChart
+from .charts import BarList, ColumnChart, PercentileBar, SideCompare, TrendChart
+from .heatmap import HeatMap, hot_zones
+from .hud import CoachBot, MatchCarousel, RadarChart, Sparkline, TierProgress, map_picture, tier_progress
+from .motion import CountUp, glow_effect, hover_glow
 from .visual import Avatar, MapCard, PremierBadge, WeaponRow
-from .theme import (ACCENT, BAD, CT_COLOR, GOOD, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num,
-                    fmt_pct, label, panel, rating_color, score_color)
+from .theme import (ACCENT, ACCENT_SOFT, BAD, CT_COLOR, GOOD, MID, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num,
+                    fmt_pct, icon, label, panel, rating_color, score_color)
 
 MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
@@ -55,6 +59,7 @@ def scroll_page() -> tuple[QScrollArea, QVBoxLayout]:
 
 def card(title: str = "", note: str = "", name: str = "card") -> tuple[QFrame, QVBoxLayout]:
     frame = panel(name)
+    hover_glow(frame, ACCENT, 28, 70)
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(18, 14, 18, 16)
     layout.setSpacing(10)
@@ -208,16 +213,18 @@ class Page(QWidget):
 
 
 class StatTile(QFrame):
-    """Tarjeta de métrica: valor grande, comparación con tu rango y barra de percentil."""
+    """Tarjeta de métrica: valor grande que cuenta hasta su número, mini tendencia, comparación con tu rango
+    y barra de percentil."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, name: str = "kpiCard"):
         super().__init__(parent)
-        self.setObjectName("card")
+        self.setObjectName(name)
         self.layout_ = QVBoxLayout(self)
-        self.layout_.setContentsMargins(16, 12, 16, 14)
-        self.layout_.setSpacing(5)
+        self.layout_.setContentsMargins(14, 12, 14, 14)
+        self.layout_.setSpacing(4)
+        hover_glow(self, ACCENT, 34, 110)
 
-    def fill(self, title: str, value: str, color: str, comp, note: str) -> None:
+    def fill(self, title: str, value, kind: str, color: str, comp, note: str = "", spark: list | None = None) -> None:
         layout = self.layout_
         clear(layout)
         top = QHBoxLayout()
@@ -225,15 +232,62 @@ class StatTile(QFrame):
         top.addStretch(1)
         top.addWidget(delta_chip(comp))
         layout.addLayout(top)
-        big = label(value, "kpiValue")
+        middle = QHBoxLayout()
+        big = CountUp(value, lambda v: fmt_metric(v, kind), "kpiValue")
         big.setStyleSheet(f"color: {color};")
-        layout.addWidget(big)
+        middle.addWidget(big)
+        middle.addStretch(1)
+        if spark and len([v for v in spark if v is not None]) >= 2:
+            middle.addWidget(Sparkline(spark, color, 78, 34), 1, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+        layout.addLayout(middle)
         reference = fmt_metric(comp.average, comp.metric.kind) if comp and comp.average is not None else "—"
         layout.addWidget(label(t('Tu rango: {0}').format(reference), "smallMuted"))
         bar = PercentileBar()
         bar.set_score(comp.score if comp else None)
         layout.addWidget(bar)
-        layout.addWidget(label(note or percentile_text(comp), "smallMuted"))
+        layout.addWidget(label(note or percentile_text(comp), "smallMuted", wrap=True))
+
+
+# Áreas del radar: categoría de las métricas → nombre en el radar.
+RADAR = [(t("Puntería"), t("Puntería")), (t("Utilidad"), t("Utilidad")), (t("Duelos"), t("Duelos")),
+         (t("Posicionamiento"), t("Posicionamiento")), (t("Clutch"), t("Clutches")), (t("General"), t("Impacto"))]
+
+
+def radar_axes(comparisons) -> list[dict]:
+    """Tu percentil promedio en cada área, con el detalle de cada métrica para el tooltip."""
+    axes = []
+    for category, title in RADAR:
+        comps = [c for c in comparisons if c.metric.category == category and c.score is not None]
+        if not comps:
+            axes.append({"label": title, "score": None, "tip": t("{0}: faltan datos").format(title)})
+            continue
+        lines = [t("{0}: vos {1} · tu rango {2}").format(c.metric.label, fmt_metric(c.mine, c.metric.kind),
+                                                         fmt_metric(c.average, c.metric.kind)) for c in comps]
+        axes.append({"label": title, "score": sum(c.score for c in comps) / len(comps), "tip": "\n".join(lines)})
+    return axes
+
+
+def radar_card(comparisons, note: str = "") -> QFrame:
+    box, layout = card(t("Radar de rendimiento"), note)
+    radar = RadarChart()
+    radar.set_axes(radar_axes(comparisons))
+    layout.addWidget(radar, 1)
+    legend = QHBoxLayout()
+    legend.addStretch(1)
+    for text, color in ((t("Vos"), ACCENT), (t("Promedio de tu rango"), CT_COLOR)):
+        dot = label("■", "smallMuted")
+        dot.setStyleSheet(f"color: {color}; font-size: 13px;")
+        legend.addWidget(dot)
+        legend.addWidget(label(text, "smallMuted"))
+        legend.addSpacing(10)
+    legend.addStretch(1)
+    layout.addLayout(legend)
+    return box
+
+
+def match_value(m: dict, key: str):
+    """Valor de una métrica en una sola partida (con las derivadas, como kills de cambio por ronda)."""
+    return derived(m["s"]).get(key)
 
 
 class ProfilePage(Page):
@@ -265,35 +319,21 @@ class ProfilePage(Page):
             body.addStretch(1)
             return
 
-        pills, layout = card(t("Últimas partidas"), t("Color = rating · raya = resultado · clic para ver el detalle"))
-        strip = MatchPills()
-        strip.set_items([{"id": m["id"], "rating": m["s"]["rating"], "result": m["result"],
-                          "tip": f"{map_label(m['map'])} · {short_date(m['played_at'])}\n{m['score_us']} : {m['score_them']} · "
-                                 f"{m['s']['kills']}/{m['s']['deaths']}/{m['s']['assists']} · ADR {fmt_num(m['s']['adr'], 0)}"}
-                         for m in view["matches"][-24:]])
-        strip.clicked.connect(self.open_match.emit)
-        layout.addWidget(strip)
-        body.addWidget(pills)
-
-        n_recent = len(view["recent"])
-        body.addWidget(label(t('Tus últimas {0} partidas contra {1}').format(n_recent, view['reference']), "pageLead"))
         grid = QGridLayout()
-        grid.setSpacing(12)
-        comps = {c.metric.key: c for c in view["recent_comparisons"]}
-        for index, key in enumerate(("rating", "adr", "kast", "kd", "hs")):
-            comp = comps.get(key)
-            metric = BY_KEY[key]
-            value = comp.mine if comp else None
-            color = rating_color(value) if key == "rating" else score_color(comp.score if comp else None)
-            tile = StatTile()
-            tile.fill(metric.label, fmt_metric(value, metric.kind), color if value is not None else TEXT, comp, "")
-            grid.addWidget(tile, 0, index)
+        grid.setSpacing(14)
+        grid.addWidget(self._carousel(view), 0, 0, 1, 2)
+        grid.addWidget(radar_card(view["comparisons"]), 0, 2, 2, 1)
+        grid.addLayout(self._kpis(view), 1, 0, 1, 2)
+        grid.addWidget(self._coach(view), 2, 0)
+        grid.addWidget(self._challenges(view), 2, 1, 1, 2)
+        for col, stretch in enumerate((4, 4, 3)):
+            grid.setColumnStretch(col, stretch)
         body.addLayout(grid)
 
         strong, weak = view["highlights"]
         row = QHBoxLayout()
-        row.setSpacing(12)
-        for title, items, good in ((t("Dónde destacás"), strong, True), (t("Dónde estás por debajo de tu rango"), weak, False)):
+        row.setSpacing(14)
+        for title, items, good in ((t("Dónde destacás"), strong, True), (t("Zonas a mejorar"), weak, False)):
             box, layout = card(title, t("Todas tus partidas con demo"))
             if not items:
                 layout.addWidget(label(t("Con los datos de ahora no hay diferencias claras."), "muted"))
@@ -325,67 +365,244 @@ class ProfilePage(Page):
 
         premier = [m for m in view["all_matches"] if m.get("rank_type") == 11 and m.get("rank_new")]
         if len(premier) >= 2:
-            box, layout = card(t("Rating de Premier"), t("Después de cada partida con demo"))
+            forecast = premier_forecast(view["all_matches"])
+            note = (t("Línea punteada: pronóstico si seguís como en las últimas {0}").format(forecast.games) if forecast
+                    else t("Después de cada partida con demo"))
+            box, layout = card(t("Rating de Premier"), note)
             chart = TrendChart()
             chart.set_data([{"value": m["rank_new"], "label": short_date(m["played_at"])[:5], "won": m["result"] == "W",
                              "tip": f"{map_label(m['map'])} · {fmt_num(m['rank_new'], 0)} ({(m['rank_change'] or 0):+.0f})"}
-                            for m in premier], decimals=0, color=CT_COLOR)
+                            for m in premier[-30:]], decimals=0, color=CT_COLOR,
+                           forecast=forecast.points if forecast else None,
+                           band=(forecast.low, forecast.high) if forecast else None)
             layout.addWidget(chart)
             body.addWidget(box)
         body.addStretch(1)
 
     def _header(self, view: dict) -> QWidget:
         box = panel("heroCard")
-        row = QHBoxLayout(box)
-        row.setContentsMargins(22, 18, 22, 18)
+        box.after_reveal = lambda w: w.setGraphicsEffect(glow_effect(w, ACCENT, 38, 80))
+        box.setGraphicsEffect(glow_effect(box, ACCENT, 38, 80))
+        outer = QVBoxLayout(box)
+        outer.setContentsMargins(22, 18, 22, 16)
+        outer.setSpacing(14)
+        row = QHBoxLayout()
         row.setSpacing(18)
         name = view["name"] or t("Tu cuenta")
-        row.addWidget(Avatar(name, 72))
+        face = Avatar(name, 80, ring=ACCENT)
+        face.setGraphicsEffect(glow_effect(face, ACCENT, 26, 160))
+        row.addWidget(face)
         text = QVBoxLayout()
-        text.setSpacing(4)
-        title = QHBoxLayout()
-        title.setSpacing(12)
-        title.addWidget(label(name, "playerName"))
-        title.addWidget(premier_badge(view["premier"], view["premier_tier"]))
-        title.addStretch(1)
-        text.addLayout(title)
+        text.setSpacing(2)
+        text.addStretch(1)
+        text.addWidget(label(name, "playerName"))
         history = view["all_history"]
         if history:
-            first = history[0]["played_at"][:10]
-            text.addWidget(label(t('{0} partidas de CS2 en tu historial de Steam desde {1} · {2} con demo analizada').format(len(history), first, len(view['all_matches'])), "muted"))
+            sub = t('{0} partidas en tu historial · {1} con demo').format(len(history), len(view['all_matches']))
         else:
-            text.addWidget(label(t('{0} partidas con demo analizada').format(len(view['all_matches'])), "muted"))
-        row.addLayout(text, 1)
+            sub = t('{0} partidas con demo analizada').format(len(view['all_matches']))
+        note = label(sub, "smallMuted")
+        note.setStyleSheet(f"color: {ACCENT_SOFT}; font-size: 12px;")
+        text.addWidget(note)
+        text.addStretch(1)
+        row.addLayout(text)
+        row.addSpacing(6)
+        row.addWidget(panel("heroDivider"))
+        row.addSpacing(6)
+        row.addLayout(self._premier_block(view), 1)
+        buttons = QVBoxLayout()
+        buttons.setSpacing(8)
+        sync = QPushButton(t("Buscar partidas"))
+        sync.setObjectName("heroButton")
+        sync.setIcon(icon("scan", TEXT, 17))
+        sync.setCursor(Qt.CursorShape.PointingHandCursor)
+        sync.clicked.connect(self.sync_requested)
+        demo = QPushButton(t("Analizar demo"))
+        demo.setObjectName("heroButton")
+        demo.setIcon(icon("import", TEXT, 17))
+        demo.setCursor(Qt.CursorShape.PointingHandCursor)
+        demo.clicked.connect(lambda: self.go_to.emit("demos"))
+        buttons.addWidget(sync)
+        buttons.addWidget(demo)
+        row.addLayout(buttons)
+        outer.addLayout(row)
+
+        line = panel("divider")
+        outer.addWidget(line)
+        stats = QHBoxLayout()
+        stats.setSpacing(10)
         source = history if history else view["all_matches"]
-        stats = []
+        recent = view["matches"][-20:]
+        results = [1.0 if m["result"] == "W" else 0.0 for m in recent]
+        rolling = [sum(results[max(0, i - 4):i + 1]) / len(results[max(0, i - 4):i + 1]) for i in range(len(results))]
+
+        def per_match(key: str, scale: float = 1.0) -> list:
+            return [m["s"][key] * scale if m["s"].get(key) is not None else None for m in recent]
+        items = []
         if source:
             wins = sum(1 for m in source if m["result"] == "W")
-            stats.append((t("Victorias"), fmt_pct(wins / len(source))))
+            items.append((t("Victorias"), wins / len(source), fmt_pct, rolling, TEXT))
             if history:
                 kills, deaths = sum(h["kills"] for h in history), sum(h["deaths"] for h in history)
-                stats.append(("K/D", fmt_num(kills / deaths if deaths else None, 2)))
-                stats.append((t("HS %"), f"{sum(h['hsp'] for h in history) / len(history):.0f} %"))
+                kd = kills / deaths if deaths else None
+                hs = sum(h['hsp'] for h in history) / len(history) / 100
             else:
-                stats.append(("K/D", fmt_num(view["total"]["kd"], 2)))
-                stats.append((t("HS %"), fmt_pct(view["total"]["hs"])))
-            stats.append((t("Rating"), fmt_num(view["total"]["rating"], 2)))
-        for title_text, value in stats:
+                kd, hs = view["total"]["kd"], view["total"]["hs"]
+            items.append(("K/D", kd, lambda v: fmt_num(v, 2), per_match("kd"), TEXT))
+            items.append((t("ADR"), view["total"]["adr"], lambda v: fmt_num(v, 0), per_match("adr"), TEXT))
+            items.append((t("HS %"), hs, fmt_pct, per_match("hs", 100), TEXT))
+            items.append((t("Rating"), view["total"]["rating"], lambda v: fmt_num(v, 2), per_match("rating"),
+                          rating_color(view["total"]["rating"])))
+        for index, (title_text, value, fmt, spark, color) in enumerate(items):
+            if index:
+                stats.addWidget(panel("heroDivider"))
             col = QVBoxLayout()
             col.setSpacing(0)
             col.addWidget(label(title_text.upper(), "cardTitle"))
-            big = label(value, "bigValue")
-            if title_text == t("Rating"):
-                big.setStyleSheet(f"color: {rating_color(view['total']['rating'])};")
-            col.addWidget(big)
-            row.addLayout(col)
-            row.addSpacing(10)
-        sync = button(t("Buscar partidas"), "scan")
-        sync.clicked.connect(self.sync_requested)
-        row.addWidget(sync)
+            line_row = QHBoxLayout()
+            line_row.setSpacing(10)
+            big = CountUp(value, fmt, "heroValue")
+            big.setStyleSheet(f"color: {color};")
+            line_row.addWidget(big)
+            line_row.addWidget(Sparkline(spark, ACCENT, 74, 30), 1, Qt.AlignmentFlag.AlignVCenter)
+            col.addLayout(line_row)
+            stats.addLayout(col, 1)
+        outer.addLayout(stats)
+        return box
+
+    def _premier_block(self, view: dict) -> QVBoxLayout:
+        col = QVBoxLayout()
+        col.setSpacing(6)
+        col.addStretch(1)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        top.addWidget(premier_badge(view["premier"], view["premier_tier"], big=True))
+        top.addWidget(label(t("Premier"), "premierChip"))
+        top.addStretch(1)
+        col.addLayout(top)
+        progress = tier_progress(view["premier"])
+        if progress:
+            share, missing, color, following = progress
+            bar = TierProgress(share, color)
+            bar.setMaximumWidth(320)
+            col.addWidget(bar)
+            note = (t("+{0} pts para el siguiente rango ({1})").format(fmt_num(missing, 0), t(following)) if following
+                    else t("Estás en el rango más alto"))
+            col.addWidget(label(note, "tierNote"))
+        else:
+            col.addWidget(label(t("Jugá Premier para ver tu rating acá"), "tierNote"))
+        col.addStretch(1)
+        return col
+
+    def _carousel(self, view: dict) -> QFrame:
+        box, layout = card(t("Últimas partidas"), t("Clic para ver el detalle (con la música del mapa)"))
+        strip = MatchCarousel()
+        items = []
+        for m in reversed(view["matches"][-15:]):
+            s = m["s"]
+            ratings = [p.get("rating") or 0 for p in m["scoreboard"]]
+            mine = next((p.get("rating") or 0 for p in m["scoreboard"] if p.get("me")), None)
+            items.append({"id": m["id"], "map": m["map"], "map_label": map_label(m["map"]), "rating": s["rating"],
+                          "kd": s["kd"], "us": m["score_us"], "them": m["score_them"], "result": m["result"],
+                          "mvp": bool(ratings) and mine is not None and mine >= max(ratings),
+                          "tip": f"{map_label(m['map'])} · {short_date(m['played_at'])}\n"
+                                 f"{s['kills']}/{s['deaths']}/{s['assists']} · ADR {fmt_num(s['adr'], 0)} · "
+                                 f"{t('Rating')} {fmt_num(s['rating'], 2)}"})
+        strip.set_items(items)
+        strip.clicked.connect(self.open_match.emit)
+        layout.addWidget(strip)
+        return box
+
+    def _kpis(self, view: dict) -> QGridLayout:
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        comps = {c.metric.key: c for c in view["recent_comparisons"]}
+        recent = view["matches"][-15:]
+        for index, key in enumerate(("rating", "adr", "kast", "hs")):
+            comp = comps.get(key)
+            metric = BY_KEY[key]
+            value = comp.mine if comp else None
+            color = rating_color(value) if key == "rating" else score_color(comp.score if comp else None)
+            tile = StatTile(name="kpiCardHot" if key == "rating" else "kpiCard")
+            spark = [match_value(m, key) for m in recent]
+            tile.fill(metric.label, value, metric.kind, color if value is not None else TEXT, comp, "", spark)
+            grid.addWidget(tile, 0, index)
+        return grid
+
+    def _coach(self, view: dict) -> QFrame:
+        box, layout = card()
+        head = QHBoxLayout()
+        head.setSpacing(10)
+        head.addWidget(CoachBot(38))
+        head.addWidget(label(t("Consejos del entrenador"), "sectionTitle"), 1)
+        layout.addLayout(head)
+        weak = [i for i in view["insights"] if i.kind == "flojo"][:2]
+        tips = weak or [i for i in view["insights"] if i.kind == "fuerte"][:2]
+        if not tips:
+            layout.addWidget(label(t("Jugá unas partidas más y te armo consejos con tus números."), "muted", wrap=True))
+        for item in tips:
+            tip = panel("coachTip")
+            row = QHBoxLayout(tip)
+            row.setContentsMargins(10, 8, 10, 8)
+            row.setSpacing(10)
+            bulb = QLabel()
+            bulb.setPixmap(icon("bulb", MID, 20).pixmap(QSize(20, 20)))
+            row.addWidget(bulb, 0, Qt.AlignmentFlag.AlignTop)
+            text = QVBoxLayout()
+            text.setSpacing(2)
+            text.addWidget(label(item.title, "body", wrap=True))
+            if item.advice:
+                text.addWidget(label(item.advice[0], "smallMuted", wrap=True))
+            row.addLayout(text, 1)
+            layout.addWidget(tip)
+        more = QPushButton(t("Ver todos los consejos  →"))
+        more.setObjectName("linkButton")
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.clicked.connect(lambda: self.go_to.emit("consejos"))
+        layout.addWidget(more, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addStretch(1)
+        return box
+
+    def _challenges(self, view: dict) -> QFrame:
+        """Desafíos: superar a tu rango en tus puntos flojos. El avance cuenta tus últimas 5 partidas."""
+        box, layout = card(t("Desafíos"), t("Últimas 5 partidas"))
+        _strong, weak = view["highlights"]
+        ranked = [c for c in view["comparisons"] if c.score is not None and c.average is not None]
+        ranked.sort(key=lambda c: c.score)
+        picks = (weak or ranked)[:3]
+        recent = view["matches"][-5:]
+        if not picks:
+            layout.addWidget(label(t("Todavía no hay datos para armar desafíos."), "muted", wrap=True))
+        for comp in picks:
+            metric = comp.metric
+            hits = 0
+            for m in recent:
+                value = match_value(m, metric.key)
+                if value is not None and (value > comp.average if metric.higher_better else value < comp.average):
+                    hits += 1
+            done = hits >= 3
+            frame = panel("challengeDone" if done else "challenge")
+            col = QVBoxLayout(frame)
+            col.setContentsMargins(12, 8, 12, 10)
+            col.setSpacing(5)
+            top = QHBoxLayout()
+            goal = (t("{0}: más de {1}").format(metric.label, fmt_metric(comp.average, metric.kind)) if metric.higher_better
+                    else t("{0}: menos de {1}").format(metric.label, fmt_metric(comp.average, metric.kind)))
+            top.addWidget(label(goal, "body", wrap=True), 1)
+            count = label(f"{hits}/3" if not done else "✓", "midValue")
+            count.setStyleSheet(f"color: {GOOD if done else TEXT};")
+            top.addWidget(count)
+            col.addLayout(top)
+            bar = PercentileBar(marker=False)
+            bar.set_score(min(100.0, hits / 3 * 100))
+            col.addWidget(bar)
+            layout.addWidget(frame)
+        layout.addStretch(1)
         return box
 
     def _highlight(self, comp, good: bool) -> QWidget:
         frame = panel("goodCard" if good else "badCard")
+        hover_glow(frame, GOOD if good else MID, 26, 110)
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(4)
@@ -396,7 +613,22 @@ class ProfilePage(Page):
         top.addWidget(chip(t('Top {0:.0f} %').format(100 - score) if good else t('Abajo del {0:.0f} %').format(100 - score),
                            "chipGood" if good else "chipBad"))
         layout.addLayout(top)
-        layout.addWidget(label(t('Vos {0} · tu rango {1}').format(fmt_metric(comp.mine, comp.metric.kind), fmt_metric(comp.average, comp.metric.kind)), "body"))
+        second = QHBoxLayout()
+        second.addWidget(label(t('Vos {0} · tu rango {1}').format(fmt_metric(comp.mine, comp.metric.kind), fmt_metric(comp.average, comp.metric.kind)), "body", wrap=True), 1)
+        top = second
+        details = QPushButton(t("Ver detalles"))
+        details.setObjectName("ghostButton")
+        details.setCursor(Qt.CursorShape.PointingHandCursor)
+        details.clicked.connect(lambda: self.go_to.emit("rango"))
+        top.addWidget(details)
+        if not good:
+            guides = QPushButton(t("Ver guías"))
+            guides.setObjectName("ghostButton")
+            guides.setCursor(Qt.CursorShape.PointingHandCursor)
+            target = "latas" if comp.metric.category == t("Utilidad") else "consejos"
+            guides.clicked.connect(lambda: self.go_to.emit(target))
+            top.addWidget(guides)
+        layout.addLayout(second)
         bar = PercentileBar()
         bar.set_score(score)
         layout.addWidget(bar)
@@ -426,17 +658,109 @@ class ProfilePage(Page):
                             " %" if metric.kind == "pct" else "")
 
 
+def map_table_icon(map_name: str) -> QIcon:
+    """Foto chiquita del mapa con esquinas redondeadas, para la columna Mapa."""
+    key = ("tabla", map_name)
+    if key not in _icons:
+        picture = map_picture(map_name if map_name.startswith("de_") else "de_" + map_name.lower().replace(" ii", "2").replace(" ", ""),
+                              54, 30)
+        canvas = QPixmap(108, 60)
+        canvas.setDevicePixelRatio(2)
+        canvas.fill(Qt.GlobalColor.transparent)
+        if not picture.isNull():
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            clip = QPainterPath()
+            clip.addRoundedRect(QRectF(0, 0, 54, 30), 6, 6)
+            painter.setClipPath(clip)
+            painter.drawPixmap(QRectF(0, 0, 54, 30), picture, QRectF(picture.rect()))
+            painter.end()
+        _icons[key] = QIcon(canvas)
+    return _icons[key]
+
+
+_icons: dict[tuple, QIcon] = {}
+
+
+def streak_text(count: int, kind: str) -> str:
+    if kind == "W":
+        return t("1 victoria") if count == 1 else t("{0} victorias seguidas").format(count)
+    if kind == "L":
+        return t("1 derrota") if count == 1 else t("{0} derrotas seguidas").format(count)
+    return t("1 empate") if count == 1 else t("{0} empates seguidos").format(count)
+
+
+class StreakStrip(QFrame):
+    """Tus últimos resultados como fichas V/D, la racha actual y el porcentaje de victorias reciente."""
+
+    def __init__(self, rows: list[dict], parent=None):
+        super().__init__(parent)
+        self.setObjectName("streakCard")
+        hover_glow(self, ACCENT, 28, 80)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(18, 12, 18, 12)
+        layout.setSpacing(6)
+        last = rows[-12:]
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        col.addWidget(label(t("ÚLTIMOS RESULTADOS"), "cardTitle"))
+        chips = QHBoxLayout()
+        chips.setSpacing(5)
+        for r in last:
+            # Inicial del resultado en el idioma de la app ("D" sola no se traduce: también es la columna de muertes).
+            text = dict(zip("WLT", "WLT" if language() == "en" else "VDE")).get(r["result"], "")
+            color = GOOD if r["result"] == "W" else BAD if r["result"] == "L" else MID
+            piece = label(text)
+            piece.setFixedSize(24, 24)
+            piece.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            piece.setToolTip(f"{map_label(r['map'])} · {r['us']} : {r['them']} · {short_date(r['played_at'])}")
+            piece.setStyleSheet(f"color: {color}; background: rgba(255,255,255,8); border: 1px solid {color};"
+                                "border-radius: 6px; font-weight: 800; font-size: 11px;")
+            chips.addWidget(piece)
+        chips.addStretch(1)
+        col.addLayout(chips)
+        layout.addLayout(col, 1)
+        streak, kind = 0, rows[-1]["result"] if rows else ""
+        for r in reversed(rows):
+            if r["result"] != kind:
+                break
+            streak += 1
+        recent = rows[-20:]
+        rate = sum(1 for r in recent if r["result"] == "W") / len(recent) if recent else None
+        for title, value, color in (
+                (t("RACHA ACTUAL"), streak_text(streak, kind) if rows else "—",
+                 GOOD if kind == "W" else BAD if kind == "L" else MID),
+                (t("VICTORIAS (ÚLTIMAS 20)"), fmt_pct(rate), score_color(rate * 100 if rate is not None else None))):
+            box = QVBoxLayout()
+            box.setSpacing(2)
+            box.addWidget(label(title, "cardTitle"))
+            big = label(value, "bigValue")
+            big.setStyleSheet(f"color: {color};")
+            box.addWidget(big)
+            layout.addSpacing(18)
+            layout.addLayout(box)
+
+
 class MatchesPage(Page):
     delete_requested = Signal(int)
+    play_map = Signal(str)
     HEADERS = [t("Fecha"), t("Modo"), t("Mapa"), t("Resultado"), "K", "A", "D", "+/-", t("ADR"), t("HS %"), t("Rating"), t("Premier"), t("Datos")]
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        box, layout = card(t("Todas tus partidas"), t("Clic en una partida con demo para ver ronda por ronda"))
+        self.streak_holder = QVBoxLayout()
+        self.body.addLayout(self.streak_holder)
+        box, layout = card(t("Todas tus partidas"), t("Tocá una partida para escuchar la música del mapa · con demo se abre el detalle"))
         self.table = table(self.HEADERS)
+        self.table.setIconSize(QSize(54, 30))
+        self.table.verticalHeader().setDefaultSectionSize(42)
+        self.table.setMouseTracking(True)
+        self.table.cellEntered.connect(lambda row, _col: self.table.selectRow(row))
         header = self.table.horizontalHeader()
         for col in range(4, 11):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)   # foto del mapa + nombre
+        self.table.setColumnWidth(2, 160)
         header.setSectionResizeMode(11, QHeaderView.ResizeMode.Fixed)  # placa de Premier
         self.table.setColumnWidth(11, 130)
         self.table.cellClicked.connect(self._open)
@@ -450,10 +774,15 @@ class MatchesPage(Page):
         self.body.addWidget(self.empty)
         self.body.addStretch(1)
         self.ids: list[int | None] = []
+        self.maps: list[str] = []
 
     def update_view(self, view: dict) -> None:
+        clear(self.streak_holder)
+        if view["rows"]:
+            self.streak_holder.addWidget(StreakStrip(view["rows"]))
         rows = list(reversed(view["rows"]))[:600]
         self.ids = [r.get("id") for r in rows]
+        self.maps = [r["map"] for r in rows]
         self.empty.setVisible(not rows)
         self.box.setVisible(bool(rows))
         self.table.setRowCount(len(rows))
@@ -461,7 +790,7 @@ class MatchesPage(Page):
             text, color = result_text(r["result"], r["us"], r["them"])
             diff = r["k"] - r["d"]
             values = [cell(short_date(r["played_at"]), MUTED), cell(SOURCE_NAMES.get(r["mode"], r["mode"])),
-                      cell(map_label(r["map"]), bold=True), cell(text, color, True, color),
+                      self._map_cell(r["map"]), cell(text, color, True, color),
                       cell(str(r["k"]), center=True), cell(str(r["a"]), center=True), cell(str(r["d"]), center=True),
                       cell(f"{diff:+d}", GOOD if diff > 0 else BAD if diff < 0 else MUTED, center=True),
                       cell(fmt_num(r.get("adr"), 0), center=True), cell(f"{r['hs']:.0f} %" if r.get("hs") is not None else "—", center=True),
@@ -472,11 +801,21 @@ class MatchesPage(Page):
             # Premier con la placa del juego.
             self.table.setCellWidget(index, 11, premier_cell(r.get("premier_value"), r.get("premier_change"), 22)
                                      if r.get("premier_value") else None)
-        fit_table(self.table)
+        fit_table(self.table, 42)
+
+    @staticmethod
+    def _map_cell(raw: str) -> QTableWidgetItem:
+        item = cell(map_label(raw), bold=True)
+        item.setIcon(map_table_icon(raw))
+        return item
 
     def _open(self, row: int, _col: int) -> None:
-        if 0 <= row < len(self.ids) and self.ids[row]:
+        if not 0 <= row < len(self.ids):
+            return
+        if self.ids[row]:
             self.open_match.emit(self.ids[row])
+        else:
+            self.play_map.emit(self.maps[row])
 
     def _menu(self, pos) -> None:
         row = self.table.rowAt(pos.y())
@@ -531,6 +870,9 @@ class RankPage(Page):
             top.addWidget(seg, 0, Qt.AlignmentFlag.AlignTop)
         body.addLayout(top)
         comps = view["recent_comparisons"] if self.scope == "recent" else view["comparisons"]
+        radar = radar_card(comps, t("Pasá el mouse por cada área"))
+        radar.setFixedHeight(360)
+        body.addWidget(radar)
         by_cat: dict[str, list] = {}
         for comp in comps:
             by_cat.setdefault(comp.metric.category, []).append(comp)
@@ -567,10 +909,28 @@ class RankPage(Page):
 
 
 class MapsPage(Page):
-    """Una tarjeta por mapa con la foto oficial: partidas, porcentaje de victorias y rating; abajo CT contra T."""
+    """Una tarjeta por mapa con la foto oficial: partidas, porcentaje de victorias y rating; abajo CT contra T.
+    Tocar una tarjeta pone la música del mapa."""
+
+    play_map = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cards: dict[str, MapCard] = {}
+        self.playing = ""
+        self.heat_map = ""
+        self.heat_mode = "deaths"
+        self.view = None
+
+    def set_playing(self, map_name: str) -> None:
+        self.playing = map_name
+        for raw, widget in self.cards.items():
+            widget.set_playing(raw == map_name)
 
     def update_view(self, view: dict) -> None:
+        self.view = view
         self.rebuild()
+        self.cards = {}
         body = self.body
         history = view["history"]
         rounds = [r for m in view["matches"] for r in m["rounds"]]
@@ -605,6 +965,9 @@ class MapsPage(Page):
         for index, (count, raw, key, wins, s, extra) in enumerate(cards):
             card_widget = MapCard(raw, map_label(raw))
             card_widget.set_stats(count, wins / count if count else None, s["rating"] if s else None, extra)
+            card_widget.set_playing(raw == self.playing)
+            card_widget.clicked.connect(self.play_map.emit)
+            self.cards[raw] = card_widget
             grid.addWidget(card_widget, index // 3, index % 3)
         for col in range(3):
             grid.setColumnStretch(col, 1)
@@ -624,7 +987,85 @@ class MapsPage(Page):
                               row(t("Morís primero"), "first_team_death", pct=True), row(t("HS %"), "hs", pct=True)])
             layout.addWidget(compare)
             body.addWidget(box)
+        if view["matches"]:
+            body.addWidget(self._heat_card(view))
         body.addStretch(1)
+
+    def _heat_card(self, view: dict) -> QFrame:
+        """Mapa de calor: dónde matás y dónde morís, con las zonas que más se repiten."""
+        spots: dict[str, dict[str, list]] = {}
+        for m in view["matches"]:
+            entry = spots.setdefault(m["map"], {"kills": [], "deaths": []})
+            for r in m["rounds"]:
+                entry["kills"].extend(r.get("kill_spots") or [])
+                if r.get("death_spot"):
+                    entry["deaths"].append(r["death_spot"])
+        maps = sorted(spots, key=lambda k: -(len(spots[k]["kills"]) + len(spots[k]["deaths"])))
+        if self.heat_map not in maps:
+            self.heat_map = maps[0] if maps else ""
+        box, layout = card(t("Mapa de calor"), t("Partidas con demo del filtro elegido"))
+        top = QHBoxLayout()
+        top.setSpacing(6)
+        group = QButtonGroup(box)
+        for raw in maps[:9]:
+            seg = QPushButton(map_label(raw))
+            seg.setObjectName("segment")
+            seg.setCheckable(True)
+            seg.setChecked(raw == self.heat_map)
+            seg.setCursor(Qt.CursorShape.PointingHandCursor)
+            seg.clicked.connect(lambda _=False, k=raw: self._heat_pick(map_name=k))
+            group.addButton(seg)
+            top.addWidget(seg)
+        top.addStretch(1)
+        modes = QButtonGroup(box)
+        for key, title in (("kills", t("Dónde matás")), ("deaths", t("Dónde morís")), ("both", t("Las dos"))):
+            seg = QPushButton(title)
+            seg.setObjectName("segment")
+            seg.setCheckable(True)
+            seg.setChecked(key == self.heat_mode)
+            seg.setCursor(Qt.CursorShape.PointingHandCursor)
+            seg.clicked.connect(lambda _=False, k=key: self._heat_pick(mode=k))
+            modes.addButton(seg)
+            top.addWidget(seg)
+        layout.addLayout(top)
+        data = spots.get(self.heat_map, {"kills": [], "deaths": []})
+        grid = view.get("grids", {}).get(self.heat_map)
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        heat = HeatMap()
+        heat.set_data(grid, data["kills"], data["deaths"], self.heat_mode)
+        row.addWidget(heat, 3)
+        side = QVBoxLayout()
+        side.setSpacing(6)
+        for title, points, color in ((t("DONDE MÁS MATÁS"), data["kills"], ACCENT), (t("DONDE MÁS MORÍS"), data["deaths"], BAD)):
+            side.addWidget(label(title, "cardTitle"))
+            zones = hot_zones(grid, points)
+            if not zones:
+                side.addWidget(label("—", "smallMuted"))
+            top_count = zones[0][1] if zones else 1
+            for name, count in zones:
+                line = QHBoxLayout()
+                line.addWidget(label(name, "body"), 1)
+                value = label(str(count), "body")
+                value.setStyleSheet(f"color: {color}; font-weight: 800;")
+                line.addWidget(value)
+                side.addLayout(line)
+                bar = PercentileBar(marker=False)
+                bar.set_score(count / top_count * 100)
+                side.addWidget(bar)
+            side.addSpacing(12)
+        side.addWidget(label(t("{0} kills y {1} muertes con posición").format(len(data["kills"]), len(data["deaths"])),
+                             "smallMuted", wrap=True))
+        side.addStretch(1)
+        row.addLayout(side, 1)
+        layout.addLayout(row)
+        return box
+
+    def _heat_pick(self, map_name: str = "", mode: str = "") -> None:
+        self.heat_map = map_name or self.heat_map
+        self.heat_mode = mode or self.heat_mode
+        if self.view:
+            self.update_view(self.view)
 
 
 def demos_rounds(demos: list[dict]) -> list[dict]:
@@ -652,10 +1093,11 @@ class WeaponsPage(Page):
         box, layout = card(t("Kills por arma"))
         layout.setSpacing(4)
         top = max(w["kills"] for _g, w in rows) or 1
-        for gun, w in [r for r in rows if r[1]["kills"]][:10]:
+        for order, (gun, w) in enumerate([r for r in rows if r[1]["kills"]][:10]):
             accuracy = w["hits"] / w["shots"] if w["shots"] else None
             note = t('HS {0} · precisión {1} · {2} de daño').format(fmt_pct(w['hs'] / w['kills'] if w['kills'] else None), fmt_pct(accuracy), fmt_num(w['damage'], 0))
-            layout.addWidget(WeaponRow(gun if gun != "inferno" else "molotov", weapon_label(gun), w["kills"], top, note))
+            layout.addWidget(WeaponRow(gun if gun != "inferno" else "molotov", weapon_label(gun), w["kills"], top, note,
+                                       order=order))
         self.body.addWidget(box)
         box, layout = card(t("Detalle"), t("Precisión: balas que pegaron sobre balas disparadas"))
         widget = table([t("Arma"), t("Kills"), t("HS %"), t("Daño"), t("Daño por kill"), t("Disparos"), t("Precisión")])
@@ -691,8 +1133,9 @@ class UtilityPage(Page):
         for index, key in enumerate(("flashes_per_round", "blinded_per_flash", "team_flash_rate", "util_adr")):
             comp = comps.get(key)
             tile = StatTile()
-            tile.fill(BY_KEY[key].label, fmt_metric(comp.mine if comp else None, BY_KEY[key].kind),
-                      score_color(comp.score if comp else None), comp, "")
+            spark = [match_value(m, key) for m in view["matches"][-15:]]
+            tile.fill(BY_KEY[key].label, comp.mine if comp else None, BY_KEY[key].kind,
+                      score_color(comp.score if comp else None), comp, "", spark)
             grid.addWidget(tile, 0, index)
         self.body.addLayout(grid)
         s = view["total"]
@@ -704,7 +1147,7 @@ class UtilityPage(Page):
                              (t("HE"), s["hes"]), (t("Asistencias por flash"), s["flash_assists"])):
             col = QVBoxLayout()
             col.addWidget(label(title.upper(), "cardTitle"))
-            col.addWidget(label(str(value), "bigValue"))
+            col.addWidget(CountUp(value, lambda v: fmt_num(v, 0), "bigValue"))
             col.addWidget(label(t('{0} cada 10 rondas').format(fmt_num(value / n * 10)), "smallMuted"))
             row.addLayout(col)
         layout.addLayout(row)
@@ -742,11 +1185,15 @@ class InsightCard(QFrame):
     def __init__(self, item: Insight, parent=None):
         super().__init__(parent)
         self.setObjectName("badCard" if item.kind == "flojo" else "goodCard")
+        hover_glow(self, BAD if item.kind == "flojo" else GOOD, 28, 90)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 14)
         layout.setSpacing(6)
         chips = QHBoxLayout()
         chips.setSpacing(8)
+        bulb = QLabel()
+        bulb.setPixmap(icon("bulb" if item.kind == "flojo" else "check", MID if item.kind == "flojo" else GOOD, 18).pixmap(QSize(18, 18)))
+        chips.addWidget(bulb)
         chips.addWidget(chip(item.area, "chipBad" if item.kind == "flojo" else "chipGood"))
         confidence = {"alta": t("Confianza alta"), "media": t("Confianza media"), "baja": t("Pocos datos todavía")}[item.confidence]
         chips.addWidget(chip(f"{confidence} · {item.sample} {t(item.unit)}", "chipWarn" if item.confidence == "baja" else "chip"))
@@ -823,17 +1270,18 @@ class HistoryPage(Page):
         kills, deaths = sum(h["kills"] for h in history), sum(h["deaths"] for h in history)
         grid = QGridLayout()
         grid.setSpacing(12)
-        tiles = [(t("Partidas"), str(games), TEXT, t('desde {0}').format(history[0]['played_at'][:10])),
-                 (t("Victorias"), fmt_pct(wins / games), score_color(wins / games * 100), f"{wins} ganadas · {games - wins - ties} perdidas · {ties} empates"),
-                 ("K/D", fmt_num(kills / deaths if deaths else None, 2), TEXT, f"{kills} kills · {deaths} muertes"),
-                 (t("HS %"), f"{sum(h['hsp'] for h in history) / games:.0f} %", TEXT, t("promedio por partida")),
-                 (t("Kills por partida"), fmt_num(kills / games), TEXT, t('{0} MVP por partida').format(fmt_num(sum(h['mvps'] for h in history) / games)))]
-        for index, (title, value, color, note) in enumerate(tiles):
-            box = panel()
+        tiles = [(t("Partidas"), games, lambda v: fmt_num(v, 0), TEXT, t('desde {0}').format(history[0]['played_at'][:10])),
+                 (t("Victorias"), wins / games, fmt_pct, score_color(wins / games * 100), t('{0} ganadas · {1} perdidas · {2} empates').format(wins, games - wins - ties, ties)),
+                 ("K/D", kills / deaths if deaths else None, lambda v: fmt_num(v, 2), TEXT, t('{0} kills · {1} muertes').format(kills, deaths)),
+                 (t("HS %"), sum(h['hsp'] for h in history) / games / 100, fmt_pct, TEXT, t("promedio por partida")),
+                 (t("Kills por partida"), kills / games, lambda v: fmt_num(v), TEXT, t('{0} MVP por partida').format(fmt_num(sum(h['mvps'] for h in history) / games)))]
+        for index, (title, value, fmt, color, note) in enumerate(tiles):
+            box = panel("kpiCard")
+            hover_glow(box, ACCENT, 30, 100)
             layout = QVBoxLayout(box)
             layout.setContentsMargins(16, 12, 16, 12)
             layout.addWidget(label(title.upper(), "cardTitle"))
-            big = label(value, "kpiValue")
+            big = CountUp(value, fmt, "kpiValue")
             big.setStyleSheet(f"color: {color};")
             layout.addWidget(big)
             layout.addWidget(label(note, "smallMuted"))

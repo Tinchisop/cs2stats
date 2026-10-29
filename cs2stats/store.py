@@ -30,7 +30,11 @@ class Settings:
                 "api_key": "", "auth_code": "", "last_sharecode": "", "gc_token": "", "gc_account": "",
                 "history_synced_at": "", "steam_synced_at": "", "steam_error": "",
                 # Mensaje de Steam al terminar cada partida (lo manda la cuenta secundaria a tu cuenta)
-                "steam_message": True, "message_pending": {}, "message_status": ""}
+                "steam_message": True, "message_pending": {}, "message_status": "",
+                # Música del mapa al abrir una partida o tocar un mapa
+                "map_music": True, "music_volume": 45,
+                # Metas propias: [{"kind", "target", "start"}]
+                "goals": []}
     SECRETS = {"api_key", "auth_code", "gc_token"}
 
     def __init__(self, path: Path | None = None):
@@ -178,6 +182,24 @@ class Store:
                                               json.dumps(match["scoreboard"]), json.dumps(match["aim"]),
                                               json.dumps(match["detail"]), match_id))
             self.db.commit()
+
+    def mark_no_spots(self, match_id: int) -> None:
+        """La demo ya no está: la partida queda sin posiciones para el mapa de calor (y no se reintenta)."""
+        with self.lock:
+            row = self.db.execute("SELECT rounds_json FROM matches WHERE id=?", (match_id,)).fetchone()
+            if row:
+                rounds = json.loads(row[0] or "[]")
+                for r in rounds:
+                    r.setdefault("kill_spots", [])
+                    r.setdefault("death_spot", None)
+                self.db.execute("UPDATE matches SET rounds_json=? WHERE id=?", (json.dumps(rounds), match_id))
+                self.db.commit()
+
+    def grids(self) -> list[tuple[str, list]]:
+        """El mapa armado con las posiciones de cada partida (para dibujar el mapa de calor)."""
+        with self.lock:
+            rows = self.db.execute("SELECT map, grid_json FROM matches").fetchall()
+        return [(r[0], json.loads(r[1] or "[]")) for r in rows]
 
     def demo_sources(self, match_key: str) -> tuple[str, str]:
         """Dónde volver a buscar la demo de una partida: el archivo en la PC y la URL de Valve."""

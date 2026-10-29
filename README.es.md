@@ -18,6 +18,10 @@ Todo corre en tu PC con herramientas oficiales de Valve. Nunca lee ni toca la me
 * **Consejos** armados con tus números, con qué tan confiable es cada uno.
 * **Latas:** las smokes, molotovs y flashes más conocidas de Mirage, Dust II, Inferno, Ancient, Anubis, Nuke y Cache, cada una probada en CS2, con el nombre del call (Ventana, Jungla, Cabezinha, CT, Triple, Caja de fuego, L...). Cada lata tiene un clip grabado en el juego en tres partes (dónde pararte, adónde apuntar y cómo cae), los pasos y cuántas veces se tiró en tus partidas. Con un clic se ve en pantalla completa.
 * **Mensaje de Steam al terminar cada partida:** tu cuenta secundaria te escribe por el chat, como un amigo, con lo mejor de tu partida (multikills, clutches, récords de ADR).
+* **Mapa de calor** de dónde matás y dónde morís en cada mapa, con las zonas que más se repiten.
+* **Vos y tus amigos:** cara a cara con los compañeros con los que más jugás, en las mismas partidas.
+* **Logros y metas:** 20 medallas (as, clutches, rachas, colores de Premier…), metas propias con barra de progreso y un pronóstico de Premier para tus próximas 10 partidas.
+* **Música del mapa:** la canción de cada mapa, sacada de tus archivos de CS2, suena al abrir una partida o tocar un mapa, y hay una radio de mapas con control de volumen.
 * **Español e inglés.** El idioma se elige abajo en la barra lateral.
 
 | Consejos | Partidas |

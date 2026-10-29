@@ -75,10 +75,12 @@ class MatchView(QWidget):
     """Detalle de una partida como página de la ventana principal (no una ventana aparte)."""
 
     back = Signal()
+    music_toggled = Signal(bool)
 
     def __init__(self, m: dict, parent=None, history: list[dict] | None = None, back_text: str = ""):
         super().__init__(parent)
         self.setObjectName("matchView")
+        self.map_name = m["map"]
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # para que Esc vuelva atrás
         self.title = f"{map_label(m['map'])} · {short_date(m['played_at'])}"
         path = map_image(m["map"])
@@ -109,6 +111,14 @@ class MatchView(QWidget):
         back.clicked.connect(self.back.emit)
         top.addWidget(back)
         top.addStretch(1)
+        self.music_button = QPushButton(t("Música del mapa"))
+        self.music_button.setObjectName("musicButton")
+        self.music_button.setCheckable(True)
+        self.music_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.music_button.setToolTip(t("Prende o apaga la música del mapa en el detalle de las partidas"))
+        self.music_button.setIcon(icon("music", "#dfe2e7", 16))
+        self.music_button.clicked.connect(self.music_toggled.emit)
+        top.addWidget(self.music_button)
         body.addLayout(top)
         self.header = QWidget()
         self.header.setLayout(self._header(m, s))
@@ -147,6 +157,10 @@ class MatchView(QWidget):
                 glow(frame, ACCENT, 30, 60)
         self.current = ""
         self.show_tab("you", animate=False)
+
+    def set_music(self, on: bool) -> None:
+        self.music_button.setChecked(on)
+        self.music_button.setIcon(icon("music", ACCENT if on else "#dfe2e7", 16))
 
     def animate_in(self) -> None:
         """Al abrir la partida: la cabecera baja suave y después entran las tarjetas una por una."""
