@@ -78,6 +78,8 @@ class Settings:
             self.path.write_text(json.dumps(self.values, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+IMPORT_DATE_MARGIN = 5   # segundos: una fecha tan cerca de la importación es la hora de importar, no la de jugar
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS matches (
     id INTEGER PRIMARY KEY,
@@ -290,6 +292,21 @@ class Store:
             self.db.execute("UPDATE sharecodes SET status = CASE WHEN demo_url IS NOT NULL AND demo_url != '' "
                             "THEN 'con_url' ELSE 'nueva' END, tries=0 WHERE status IN ('importada', 'vencida')")
             self._commit()
+
+    def repair_played_at(self) -> int:
+        """Corrige las partidas sin fecha de Valve, que quedaron con la hora de importación, usando el historial de Steam."""
+        with self.lock:
+            cursor = self.db.execute(
+                """UPDATE matches SET played_at = (
+                       SELECT h.played_at FROM sharecodes s JOIN history h ON h.demo_url = s.demo_url
+                       WHERE s.match_key = matches.match_key AND h.played_at IS NOT NULL LIMIT 1)
+                   WHERE ABS(julianday(played_at) - julianday(imported_at)) * 86400 < ? AND EXISTS (
+                       SELECT 1 FROM sharecodes s JOIN history h ON h.demo_url = s.demo_url
+                       WHERE s.match_key = matches.match_key AND h.played_at IS NOT NULL)""", (IMPORT_DATE_MARGIN,))
+            changed = cursor.rowcount
+            if changed:
+                self._commit()
+        return changed
 
     def set_played_at(self, match_key: str, played_at: str) -> None:
         with self.lock:

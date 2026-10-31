@@ -415,6 +415,8 @@ class ReplayPlayer(QWidget):
 
     Con `clip` (una jugada: ronda, desde, hasta) muestra solo ese tramo, en bucle."""
 
+    open_in_game = Signal(int, float)   # ronda y segundo
+
     def __init__(self, data: dict, grid=None, clip: dict | None = None, title: str = "", parent=None):
         super().__init__(parent)
         self.scene = ReplayScene(data, grid)
@@ -499,6 +501,10 @@ class ReplayPlayer(QWidget):
         save.setToolTip(t("Guarda este tramo como video MP4 o GIF, sin abrir el juego"))
         save.clicked.connect(self.save)
         controls.addWidget(save)
+        in_game = button(t("Abrir en CS2"), "external")
+        in_game.setToolTip(t("Abre la demo real en CS2, en este momento de la ronda y con la cámara en tu jugador"))
+        in_game.clicked.connect(self._open_in_game)
+        controls.addWidget(in_game)
         layout.addLayout(controls)
         layout.addWidget(label(t("Espacio: play o pausa · ← →: 5 segundos · turquesa: tus kills · rojo: tu muerte"),
                                "smallMuted", wrap=True))
@@ -598,6 +604,10 @@ class ReplayPlayer(QWidget):
         low, high = self.bounds()
         save_clip(self, self.scene, self.index, low, high, self.title)
 
+    def _open_in_game(self) -> None:
+        self.pause()
+        self.open_in_game.emit(self.scene.rounds[self.index]["n"], self.bounds()[0] if self.clip else self.at)
+
 
 def save_clip(parent: QWidget, scene: ReplayScene, index: int, start: float, end: float, title: str = "") -> None:
     """Pregunta dónde guardar y graba el tramo como MP4 o GIF, con una barra de progreso."""
@@ -680,6 +690,7 @@ class ReplayTab(QWidget):
     """Pestaña del detalle de partida. La repetición se abre recién cuando se mira la pestaña (son datos pesados)."""
 
     build_requested = Signal()
+    open_in_game = Signal(int, float)   # ronda y segundo
 
     def __init__(self, match: dict, loader, grid=None, parent=None):
         super().__init__(parent)
@@ -707,6 +718,7 @@ class ReplayTab(QWidget):
         if data:
             box, layout = card(t("Repetición 2D"), t("Los 10 jugadores ronda por ronda"))
             self.player = ReplayPlayer(data, self.grid, title=map_label(self.match["map"]))
+            self.player.open_in_game.connect(self.open_in_game)
             layout.addWidget(self.player)
             self.layout_.addWidget(box)
             # Se arma recién al mostrarse: la página que la contiene tiene que volver a medir su alto.

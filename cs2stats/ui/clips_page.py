@@ -5,7 +5,7 @@ como un tramo corto de la repetición 2D que se mira acá o se guarda como MP4 o
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QButtonGroup, QGridLayout, QHBoxLayout, QPushButton, QVBoxLayout
 
 from ..i18n import t
@@ -23,6 +23,8 @@ PAGE_SIZE = 24
 
 class ClipsPage(Page):
     """Tus jugadas de todas las partidas con repetición. Elegís una y se reproduce arriba en bucle."""
+
+    open_in_game = Signal(int, int, float)   # partida, ronda y segundo
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -110,6 +112,7 @@ class ClipsPage(Page):
             return box
         player = ReplayPlayer(data, (self.view or {}).get("grids", {}).get(match["map"]), clip=moment,
                               title=f"{title} · {map_label(match['map'])}")
+        player.open_in_game.connect(lambda number, at: self.open_in_game.emit(match["id"], number, at))
         player.canvas.setMinimumHeight(460)
         layout.addWidget(player)
         open_match = QPushButton(t("Ver la partida completa  →"))
@@ -148,6 +151,9 @@ class ClipsPage(Page):
         save = button(t("Guardar"), "film")
         save.clicked.connect(lambda: self._save(match, moment))
         row.addWidget(save)
+        in_game = button(t("Abrir en CS2"), "external")
+        in_game.clicked.connect(lambda: self.open_in_game.emit(match["id"], moment["round"], moment["from"]))
+        row.addWidget(in_game)
         row.addStretch(1)
         col.addLayout(row)
         return frame

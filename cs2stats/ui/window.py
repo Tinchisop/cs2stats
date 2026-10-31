@@ -19,12 +19,13 @@ from ..importer import import_demo, pending_demos
 from ..insights import analyze
 from ..metrics import SOURCE_NAMES, map_label, summarize
 from ..steamapi import SteamError
-from ..store import PARSER_VERSION, Settings, Store, data_dir
+from ..store import IMPORT_DATE_MARGIN, PARSER_VERSION, Settings, Store, data_dir
 from ..i18n import LANGUAGES, language, t
 from ..resumen import match_message
 from ..sync import build_replay, reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
 from ..assets import (MAP_MUSIC, avatar_path, download_avatar, download_player_avatars, extract_game_assets,
                       extract_map_music, extract_overviews, map_music)
+from ..demoview import DemoViewError, open_moment
 from ..faceit import sync_faceit
 from ..prematch import LobbyError, collect, detect_party
 from ..nades import MapGrid
@@ -40,6 +41,7 @@ from .pages import (AdvicePage, HelpPage, HistoryPage, MapsPage, MatchesPage, Pr
                     WeaponsPage)
 from .prematch_page import PrematchPage
 from .radio import MusicButton, MusicPanel
+from .sessions_page import SessionsPage
 from .social import AchievementsPage, FriendsPage
 from .sound import MapMusic
 from .theme import ACCENT, BAD, GOOD, MUTED, STYLE, app_icon, fmt_num, icon, label, panel
@@ -124,7 +126,7 @@ class TaskWorker(QObject):
         try:
             result = self.task(self.message.emit)
             self.finished.emit(result, "")
-        except (SteamError, HelperError, RecorderError, LobbyError) as error:
+        except (SteamError, HelperError, RecorderError, LobbyError, DemoViewError) as error:
             log.warning("Tarea: %s", error)
             self.finished.emit(None, str(error))
         except BaseException as error:
@@ -183,6 +185,15 @@ class GsiBridge(QObject):
     activity = Signal(str)
 
 
+def real_date(match: dict) -> bool:
+    """False si la fecha de la partida es en realidad la hora en que se importó."""
+    try:
+        gap = datetime.fromisoformat(match["played_at"]) - datetime.fromisoformat(match["imported_at"])
+    except (KeyError, TypeError, ValueError):
+        return True
+    return abs(gap.total_seconds()) >= IMPORT_DATE_MARGIN
+
+
 def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
     """Una lista de partidas: las de demo con todo el detalle y las del historial de Steam que no tienen demo."""
     rows = []
@@ -191,7 +202,7 @@ def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
         premier = ""
         if m.get("rank_type") == 11 and m.get("rank_new"):
             premier = f"{fmt_num(m['rank_new'], 0)} ({(m.get('rank_change') or 0):+.0f})"
-        rows.append({"id": m["id"], "played_at": m["played_at"], "mode": m["source"], "map": m["map"], "result": m["result"],
+        rows.append({"id": m["id"], "played_at": m["played_at"], "date_ok": real_date(m), "mode": m["source"], "map": m["map"], "result": m["result"],
                      "us": m["score_us"], "them": m["score_them"], "k": s["kills"], "a": s["assists"], "d": s["deaths"],
                      "adr": s["adr"], "hs": (s["hs"] or 0) * 100 if s["hs"] is not None else None, "rating": s["rating"],
                      "premier": premier, "premier_value": m.get("rank_new") if m.get("rank_type") == 11 else None,
@@ -229,7 +240,7 @@ class MainWindow(QMainWindow):
            ("jugadas", t("Jugadas"), "film"), ("rango", t("Tu rango"), "rank"), ("mapas", t("Mapas"), "map"), ("latas", t("Latas"), "grenade"),
            ("armas", t("Armas"), "target"),
            ("utilidad", t("Utilidad y plata"), "bolt"), ("consejos", t("Consejos"), "bulb"),
-           ("entrenamiento", t("Entrenamiento"), "dumbbell"), ("amigos", t("Amigos"), "friends"),
+           ("sesiones", t("Sesiones"), "session"), ("entrenamiento", t("Entrenamiento"), "dumbbell"), ("amigos", t("Amigos"), "friends"),
            ("prepartida", t("Pre-partida"), "duel"),
            ("logros", t("Logros y metas"), "medal"), ("historial", t("Historial"), "history"),
            (t("CUENTA"), None, None), ("conectar", t("Conectar Steam"), "link"), ("demos", t("Demos y aviso"), "import"),
@@ -237,7 +248,7 @@ class MainWindow(QMainWindow):
     TITLES = {"perfil": t("Perfil"), "partidas": t("Partidas"), "rango": t("Comparación con tu rango"), "mapas": t("Mapas"),
               "latas": t("Latas"),
               "armas": t("Armas"), "utilidad": t("Utilidad y plata"), "consejos": t("Consejos para mejorar"),
-              "jugadas": t("Tus jugadas"), "entrenamiento": t("Entrenamiento"), "prepartida": t("Asistente pre-partida"),
+              "jugadas": t("Tus jugadas"), "sesiones": t("Tus sesiones"), "entrenamiento": t("Entrenamiento"), "prepartida": t("Asistente pre-partida"),
               "historial": t("Historial completo"), "amigos": t("Vos y tus amigos"), "logros": t("Logros y metas"), "conectar": t("Conectar Steam"), "demos": t("Demos y aviso de fin de partida"),
               "ayuda": t("Cómo usar CS2 Stats")}
 
@@ -266,6 +277,9 @@ class MainWindow(QMainWindow):
         self.lobby_runner.done.connect(self._lobby_done)
         self.lobby_task = ""
         self.replay_runner.message.connect(self._replay_message)
+        self.demo_runner = TaskRunner("abrir en CS2", self)
+        self.demo_runner.message.connect(self._demo_message)
+        self.demo_runner.done.connect(self._demo_done)
         self.stop_recording = False
         self.quitting = False
         self.game_dir = cs2_game_dir()
@@ -281,6 +295,7 @@ class MainWindow(QMainWindow):
             reload_saved_history(self.store, self.settings)
         except (OSError, ValueError):
             log.exception("No se pudo releer el historial guardado")
+        self.store.repair_played_at()
 
         self.setWindowTitle(t("CS2 Stats"))
         self.setWindowIcon(app_icon())
@@ -331,7 +346,7 @@ class MainWindow(QMainWindow):
         self.pages = {"perfil": ProfilePage(), "partidas": MatchesPage(), "rango": RankPage(), "mapas": MapsPage(),
                       "latas": NadesPage(), "armas": WeaponsPage(), "utilidad": UtilityPage(), "consejos": AdvicePage(),
                       "amigos": FriendsPage(), "logros": AchievementsPage(), "jugadas": ClipsPage(),
-                      "entrenamiento": TrainingPage(), "prepartida": PrematchPage(),
+                      "sesiones": SessionsPage(), "entrenamiento": TrainingPage(), "prepartida": PrematchPage(),
                       "historial": HistoryPage(), "conectar": ConnectPage(), "demos": DemosPage(), "ayuda": HelpPage()}
         self.pages["logros"].set_goals(self.settings.values.get("goals", []))
         self.pages["logros"].goals_changed.connect(self._goals_changed)
@@ -342,6 +357,7 @@ class MainWindow(QMainWindow):
         content.addWidget(self.stack, 1)
         outer.addLayout(content, 1)
 
+        self.pages["jugadas"].open_in_game.connect(self.open_in_game)
         self.pages["perfil"].sync_requested.connect(self.sync_all)
         self.pages["partidas"].delete_requested.connect(self.delete_match)
         self.pages["partidas"].play_map.connect(self.toggle_music)
@@ -1005,6 +1021,7 @@ class MainWindow(QMainWindow):
                          grid=self.view.get("grids", {}).get(match["map"]))
         view.back.connect(lambda: self.go(self.current_page))
         view.replay_requested.connect(self.start_replay)
+        view.replay_tab.open_in_game.connect(lambda number, at: self.open_in_game(match["id"], number, at))
         view.music_toggled.connect(self._match_music)
         self.stack.addWidget(view)
         self.match_view = view
@@ -1040,6 +1057,38 @@ class MainWindow(QMainWindow):
                 view.replay_tab.set_busy(error or t("No se pudo armar: la demo ya no está disponible."))
         if ready:
             self.refresh()
+
+    # Abrir una jugada en CS2
+    def open_in_game(self, match_id: int, round_number: int, seconds: float) -> None:
+        match = next((m for m in self.view["all_matches"] if m["id"] == match_id), None)
+        if not match:
+            return
+        if self.demo_runner.busy:
+            QMessageBox.information(self, t("CS2 Stats"), t("CS2 todavía está abriendo la jugada anterior. Esperá a que termine."))
+            return
+        if not self.settings.values.get("demo_notice_seen") and not cs2_running():
+            answer = QMessageBox.question(self, t("Abrir en CS2"), t(
+                "CS2 se va a abrir en modo de repeticiones (-insecure). No afecta tu cuenta, pero en ese modo no podés "
+                "jugar online: para volver a jugar, cerrá CS2 y abrilo normal desde Steam.\n\n¿Abrirlo?"))
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            self.settings.set("demo_notice_seen", True)
+        self.demo_runner.start(lambda say: open_moment(self.store, match, round_number, seconds, say))
+        self._demo_message(t("Preparando la jugada"))
+
+    def _demo_message(self, text: str) -> None:
+        self.tray.showMessage(t("Abrir en CS2"), text, QSystemTrayIcon.MessageIcon.NoIcon, 2500)
+
+    def _demo_done(self, result, error: str) -> None:
+        if error or result is None:
+            QMessageBox.warning(self, t("Abrir en CS2"), error or t("No se pudo abrir la jugada en CS2."))
+        elif result.commands:
+            QApplication.clipboard().setText(result.commands[0])
+            box = QMessageBox(QMessageBox.Icon.Information, t("Abrir en CS2"), t(
+                "CS2 ya está abierto, así que la app no lo toca para no cortarte una partida. Abrí la consola de CS2 y "
+                "pegá el primer comando (ya está copiado). Cuando cargue la demo, escribí el segundo:\n\n{0}\n{1}").format(*result.commands), QMessageBox.StandardButton.Ok, self)
+            box.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            box.exec()
 
     # Pre-partida
     def detect_lobby(self) -> None:

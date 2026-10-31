@@ -308,6 +308,123 @@ def fake_match(played_at, map_name="de_mirage", result="W", **stats):
             "scoreboard": [], "rounds": []}
 
 
+def session_rows(day, results, hour=20):
+    return [{"played_at": f"2026-{day}T{hour + i // 2:02d}:{(i % 2) * 45:02d}:00", "result": r, "k": 15, "d": 15, "rating": 1.0}
+            for i, r in enumerate(results)]
+
+
+class SesionesTest(unittest.TestCase):
+    def days(self, count):
+        return [f"{month:02d}-{day:02d}" for month in range(1, 5) for day in range(1, 26)][:count]
+
+    def test_corta_por_tiempo_y_descarta_fechas_falsas(self):
+        from cs2stats.sessions import split_sessions
+        rows = session_rows("10-01", "WL") + session_rows("10-02", "W")
+        rows.append({"played_at": "2026-10-03T14:00:00", "result": "W", "date_ok": False})
+        self.assertEqual([len(s) for s in split_sessions(rows)], [2, 1])
+
+    def test_detecta_el_cansancio_y_cuando_cortar(self):
+        from datetime import datetime
+        from cs2stats.sessions import analyze_sessions, current_advice
+        rows = [row for day in self.days(30) for row in session_rows(day, "WWLL")]
+        report = analyze_sessions(rows)
+        self.assertEqual(report.stop_after, 3)
+        self.assertEqual(report.findings[0].key, "fatigue")
+        today = session_rows("10-20", "WW")
+        report = analyze_sessions(rows[:0] + [r for r in rows] + today, datetime(2026, 10, 20, 21, 0))
+        self.assertEqual(len(report.current), 2)
+        self.assertIn("3", current_advice(report))
+
+    def test_sin_muestra_no_saca_conclusiones(self):
+        from cs2stats.sessions import analyze_sessions
+        report = analyze_sessions([row for day in self.days(4) for row in session_rows(day, "WWLL")])
+        self.assertIsNone(report.stop_after)
+        self.assertEqual(report.findings, [])
+
+    def test_vacio(self):
+        from cs2stats.sessions import analyze_sessions
+        self.assertEqual(analyze_sessions([]).games, 0)
+
+
+class FechasTest(unittest.TestCase):
+    def test_corrige_la_hora_de_importacion_con_el_historial(self):
+        from cs2stats.store import Store
+        with tempfile.TemporaryDirectory() as folder:
+            store = Store(Path(folder) / "t.db")
+            for key, played, url in (("mala", "2026-10-26T14:34:20", "u1"), ("buena", "2026-10-20T10:00:00", "u2")):
+                store.db.execute("INSERT INTO matches (match_key, steamid, played_at, imported_at) VALUES (?,1,?,?)",
+                                 (key, played, "2026-10-26T14:34:20"))
+                store.db.execute("INSERT INTO sharecodes (code, match_key, demo_url) VALUES (?,?,?)", (key, key, url))
+                store.db.execute("INSERT INTO history (key, played_at, demo_url) VALUES (?,?,?)", (key, "2026-10-26T03:33:54", url))
+            self.assertEqual(store.repair_played_at(), 1)
+            rows = dict(store.db.execute("SELECT match_key, played_at FROM matches").fetchall())
+            store.db.close()
+        self.assertEqual(rows, {"mala": "2026-10-26T03:33:54", "buena": "2026-10-20T10:00:00"})
+
+
+class AbrirEnCs2Test(unittest.TestCase):
+    class FakeConsole:
+        def __init__(self, replies):
+            self.replies, self.sent = list(replies), []
+
+        def push(self, command):
+            self.sent.append(command)
+
+        def drain(self):
+            return self.replies.pop(0) if self.replies else ""
+
+        def close(self):
+            pass
+
+    def test_espera_la_carga_y_confirma_el_tick(self):
+        from unittest import mock
+        from cs2stats import demoview
+        console = self.FakeConsole(["Client: Connected [DEMO]", "Demo Skipping finished at tick 0", "Demo Skipping finished at tick 5000"])
+        with mock.patch.object(demoview.time, "sleep"):
+            self.assertTrue(demoview.jump(console, 5000, 'Yo "x"'))
+        # Un salto que cae en otro tick (el 0, durante la carga) no cuenta como llegada: se sigue esperando el pedido.
+        self.assertEqual(console.replies, [])
+        self.assertEqual(console.sent, ["status", "demo_gototick 5000 0 0", 'spec_player "Yo x"'])
+
+    def test_no_pide_saltar_mientras_carga(self):
+        from unittest import mock
+        from cs2stats import demoview
+        console = self.FakeConsole([])
+        with mock.patch.object(demoview.time, "sleep"), mock.patch.object(demoview, "_wait", return_value="Client: loading"):
+            self.assertFalse(demoview.jump(console, 5000, "", timeout=0))
+        self.assertNotIn("demo_gototick 5000 0 0", console.sent)
+
+    def test_vuelve_a_cargar_si_la_demo_se_cerro(self):
+        from unittest import mock
+        from cs2stats import demoview
+        console = self.FakeConsole([])
+        with mock.patch.object(demoview, "cs2_game_dir", return_value=Path("C:/x")), \
+                mock.patch.object(demoview, "prepare_demo", return_value=(Path("a.dem"), "replays/a.dem")), \
+                mock.patch.object(demoview, "target_tick", return_value=5000), \
+                mock.patch.object(demoview, "cs2_running", return_value=True), \
+                mock.patch.object(demoview, "_connect", return_value=console), \
+                mock.patch.object(demoview, "_demo_playing", return_value=False), \
+                mock.patch.object(demoview, "_loaded", "replays/a.dem"), \
+                mock.patch.object(demoview, "jump", return_value=True), \
+                mock.patch.object(demoview.time, "sleep"):
+            result = demoview.open_moment(None, {"my_name": "yo"}, 3, 10.0, lambda _text: None)
+        self.assertEqual(result.commands, [])
+        self.assertIn('playdemo "replays/a.dem"', console.sent)
+
+    def test_cs2_abierto_a_mano_no_se_toca(self):
+        from unittest import mock
+        from cs2stats import demoview
+        with mock.patch.object(demoview, "cs2_game_dir", return_value=Path("C:/x")), \
+                mock.patch.object(demoview, "prepare_demo", return_value=(Path("a.dem"), "replays/a.dem")), \
+                mock.patch.object(demoview, "target_tick", return_value=5000), \
+                mock.patch.object(demoview, "cs2_running", return_value=True), \
+                mock.patch.object(demoview, "_connect", return_value=None), \
+                mock.patch.object(demoview, "launch_for_demo") as launch:
+            result = demoview.open_moment(None, {"my_name": "yo"}, 3, 10.0, lambda _text: None)
+        launch.assert_not_called()
+        self.assertEqual(result.commands, ['playdemo "replays/a.dem"', "demo_gototick 5000 0 0"])
+
+
 class EntrenamientoTest(unittest.TestCase):
     def test_retos_de_la_semana(self):
         from datetime import datetime

@@ -80,19 +80,8 @@ def _buy_type(equip: float, pistol: bool) -> str:
     return "completa"
 
 
-def parse_demo(path: str, steamid: int) -> dict:
-    try:
-        parser = DemoParser(path)
-        header = parser.parse_header()
-        events = {name: _records(frame) for name, frame in parser.parse_events(EVENTS)}
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except BaseException as error:  # demoparser2 lanza PanicException (BaseException) con demos rotas
-        raise DemoError(tr("No se pudo leer la demo: {0}").format(error)) from error
-
-    map_name = str(header.get("map_name") or "desconocido")
-    server = str(header.get("server_name") or "")
-
+def _round_windows(events: dict) -> list[dict]:
+    """Los ticks de cada ronda jugada, sin el calentamiento."""
     starts = [row["tick"] for row in events.get("begin_new_match", [])]
     match_start = max(starts) if starts else 0
     ends: list[dict] = []
@@ -122,6 +111,36 @@ def parse_demo(path: str, steamid: int) -> dict:
         previous_end = row["tick"]
     for index, window in enumerate(windows):
         window["until"] = windows[index + 1]["open"] if index + 1 < len(windows) else float("inf")
+    return windows
+
+
+def round_start_ticks(path: str) -> list[int]:
+    """El tick en que arranca cada ronda (fin del freeze), leyendo solo los eventos de rondas de la demo."""
+    try:
+        frames = DemoParser(path).parse_events(["begin_new_match", "cs_pre_restart", "round_freeze_end", "round_end",
+                                                "buytime_ended"])
+        events = {name: _records(frame) for name, frame in frames}
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as error:  # demoparser2 lanza PanicException (BaseException) con demos rotas
+        raise DemoError(tr("No se pudo leer la demo: {0}").format(error)) from error
+    return [int(window["start"]) for window in _round_windows(events)]
+
+
+def parse_demo(path: str, steamid: int) -> dict:
+    try:
+        parser = DemoParser(path)
+        header = parser.parse_header()
+        events = {name: _records(frame) for name, frame in parser.parse_events(EVENTS)}
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException as error:  # demoparser2 lanza PanicException (BaseException) con demos rotas
+        raise DemoError(tr("No se pudo leer la demo: {0}").format(error)) from error
+
+    map_name = str(header.get("map_name") or "desconocido")
+    server = str(header.get("server_name") or "")
+
+    windows = _round_windows(events)
 
     snapshot_ticks = sorted({w["start"] for w in windows} | {w["buy"] for w in windows} | {w["end"] + MVP_DELAY for w in windows})
     try:

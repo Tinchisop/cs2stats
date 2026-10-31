@@ -131,6 +131,10 @@ def icon(kind: str, color: str = MUTED, size: int = 20) -> QIcon:
         painter.drawLine(QPointF(12, 12), QPointF(15.5, 14))
         painter.drawLine(QPointF(3.5, 5), QPointF(4.2, 9.2))
         painter.drawLine(QPointF(4.2, 9.2), QPointF(8.3, 8.4))
+    elif kind == "session":
+        painter.drawEllipse(QRectF(3.5, 3.5, 17, 17))
+        painter.drawLine(QPointF(12, 7.5), QPointF(12, 12))
+        painter.drawLine(QPointF(12, 12), QPointF(15.5, 14))
     elif kind == "link":
         painter.drawRoundedRect(QRectF(2.5, 8.5, 10, 7), 3.5, 3.5)
         painter.drawRoundedRect(QRectF(11.5, 8.5, 10, 7), 3.5, 3.5)

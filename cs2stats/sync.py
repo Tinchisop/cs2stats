@@ -266,6 +266,7 @@ def sync_history(store: Store, settings: Settings, cookies: list[str], log: Call
         shutil.rmtree(folder, ignore_errors=True)
         fresh.rename(folder)
     added = store.save_history(settings["steamid"], rows)
+    store.repair_played_at()
     settings.set("history_synced_at", datetime.now().isoformat(timespec="seconds"))
     log(t('Historial de Steam: {0} partidas leídas').format(len(rows)))
     return added
