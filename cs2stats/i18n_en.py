@@ -1234,6 +1234,8 @@ EN = {
     "Sin nivel de FACEIT": "No FACEIT level",
     "Nivel {0} de FACEIT": "FACEIT level {0}",
     "Todos los modos": "All modes",
+    "Tirá": "Throw",
+    "Tirá desde acá": "Throw from here",
     "Abrir en CS2": "Open in CS2",
     "Abre la demo real en CS2, en este momento de la ronda y con la cámara en tu jugador": "Opens the real demo in CS2, at this moment of the round, with the camera on your player",
     "Preparando la demo para CS2": "Getting the demo ready for CS2",

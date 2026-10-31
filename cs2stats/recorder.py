@@ -11,10 +11,12 @@ Cómo funciona, sin tocar la memoria del juego ni simular el teclado:
 
 from __future__ import annotations
 
+import heapq
 import json
 import logging
 import math
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -42,12 +44,27 @@ PRACTICE_SETUP = [
     "mp_restartgame 1",
 ]
 HUD_RESTORE = "cl_drawhud 1; cl_draw_only_deathnotices 0; r_drawviewmodel 1"
-CLIP_FPS = 30
+CLIP_FPS = 60
 CLIP_WIDTH = 1280
-APPROACH_SECONDS = 2.2   # la cámara camina hacia el lugar donde hay que pararse
-APPROACH_STOP = 90       # ...y frena a esta distancia, mirando el piso de ese lugar
+CLIP_CROP = 0.92
+APPROACH_SECONDS = 2.2   # sin lugar para caminar, cuánto tarda en girar mostrando dónde te parás
 EYE = 64
-CAMERA_UP = 100          # la cámara del acercamiento va un poco más alta que los ojos, para ver más alrededor
+CAMERA_RATE = 90         # veces por segundo que se le manda la mira a CS2 mientras se mueve
+WALK_MIN, WALK_MAX = 72, 480   # unidades que se camina hasta el lugar de tiro
+WALK_LOOK = 200          # desde esta distancia empieza a mirar el piso donde va a pararse
+ROUTE_FLOOR = 70         # diferencia de altura para aceptar que una celda es el piso del lugar de tiro
+ROUTE_STEP = 34          # desnivel máximo entre dos celdas vecinas (escaleras sí, techos y cajas no)
+ROUTE_QUIET = 12         # cuánto evita la ruta las celdas por donde casi no pasa nadie
+ROUTE_AHEAD = 72         # a esta distancia de un punto de la ruta ya apunta al siguiente
+WALK_SLOW = 70           # a esta distancia pasa a caminar con shift, para frenar justo
+WALK_ARRIVED = 10
+WALK_ENOUGH = 24         # si le falta menos que esto, se nota nada al acomodarlo en el lugar exacto
+REHEARSALS = 5           # intentos de encontrar una ruta sin trabarse
+WALK_TIMEOUT = 7.0
+WALK_STUCK = 0.7         # segundos sin acercarse: se chocó con algo
+WALK_MAX_PITCH = 30.0
+TURN_SECONDS = 1.1       # giro hasta el punto de mira
+POSITION = re.compile(r"setpos\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)")
 
 
 class RecorderError(Exception):
@@ -77,7 +94,7 @@ def _clip_file(name: str) -> Path:
 
 def clip_path(lineup_id: str) -> Path:
     """El clip propio si lo grabaste; si no, el que viene con la app."""
-    return _clip_file(f"{lineup_id}.webp")
+    return _clip_file(f"{lineup_id}.mp4")
 
 
 def clip_meta(lineup_id: str) -> dict:
@@ -88,30 +105,57 @@ def clip_meta(lineup_id: str) -> dict:
         return {"fps": 20, "position": None, "aim": [0.0, 2.3]}
 
 
-def approach_path(lineup, grid) -> tuple[tuple[float, float], float] | None:
-    """Desde qué lado acercar la cámara al lugar de tiro: la dirección con más piso libre (según dónde caminaron los
-    jugadores en tus demos), así no atraviesa paredes. Devuelve (dirección, distancia) o None si no hay lugar."""
+def walking_route(lineup, grid, blocked: set | None = None) -> list[tuple[float, float, float]] | None:
+    """Por dónde llegar caminando al lugar de tiro: puntos (x, y, piso) sobre las celdas por donde caminan los jugadores en
+    las demos, prefiriendo las más transitadas (lejos de paredes y cajas) y sin pasar por las celdas bloqueadas.
+    None si el lugar no conecta con el piso."""
     if not grid or not grid.cells:
         return None
     from .parser import GRID
     x, y, z = lineup.pos
     floor = z - EYE
-    front = math.radians(lineup.ang[1])
-    best = None
-    for step in range(16):
-        angle = front + step * math.pi / 8
-        dx, dy = math.cos(angle), math.sin(angle)
-        free = 0
-        for d in range(24, 330, 24):
-            cell = grid.cells.get((int((x + dx * d) // GRID), int((y + dy * d) // GRID)))
-            if not cell or abs(cell[0] - floor) > 40:
-                break
-            free = d
-        # Mejor desde adelante (hacia donde se tira): la cámara mira el lugar con la esquina o la pared de fondo.
-        score = free - min(step, 16 - step) * 12
-        if free >= 96 and (best is None or score > best[0]):
-            best = (score, (dx, dy), free)
-    return (best[1], min(best[2], 300)) if best else None
+    home = (int(x // GRID), int(y // GRID))
+    blocked = blocked or set()
+    starts = sorted(((home[0] + i, home[1] + j) for i in range(-2, 3) for j in range(-2, 3)),
+                    key=lambda c: abs(c[0] - home[0]) + abs(c[1] - home[1]))
+    start = next((c for c in starts if c in grid.cells and abs(grid.cells[c][0] - floor) <= ROUTE_FLOOR), None)
+    if start is None:
+        return None
+    best = {start: 0.0}
+    came: dict[tuple[int, int], tuple[int, int]] = {}
+    length = {start: 0.0}
+    heap = [(0.0, start)]
+    far = start
+    while heap:
+        cost, cell = heapq.heappop(heap)
+        if cost > best[cell]:
+            continue
+        if length[cell] > length[far]:
+            far = cell
+        if length[cell] >= WALK_MAX:
+            far = cell
+            break
+        for i, j in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            near = (cell[0] + i, cell[1] + j)
+            info = grid.cells.get(near)
+            if not info or near in blocked or abs(info[0] - grid.cells[cell][0]) > ROUTE_STEP:
+                continue
+            if i and j and ((cell[0] + i, cell[1]) not in grid.cells or (cell[0], cell[1] + j) not in grid.cells):
+                continue    # no cortar esquinas
+            step = GRID * math.hypot(i, j)
+            total = cost + step * (1 + ROUTE_QUIET / max(1, info[2]))
+            if total < best.get(near, math.inf):
+                best[near], came[near], length[near] = total, cell, length[cell] + step
+                heapq.heappush(heap, (total, near))
+    if length[far] < WALK_MIN:
+        return None
+    route = []
+    cell = far
+    while cell != start:
+        route.append(((cell[0] + 0.5) * GRID, (cell[1] + 0.5) * GRID, grid.cells[cell][0]))
+        cell = came[cell]
+    route.append((x, y, floor))
+    return route
 
 
 def ffmpeg_path() -> str | None:
@@ -223,8 +267,10 @@ def _release_steps(lineup) -> list[tuple[str, float]]:
 
 
 def record_lineups(map_name: str, lineups: list, log_cb: Callable[[str], None], should_stop: Callable[[], bool],
-                   grid=None) -> int:
-    """Graba un clip por lata. Devuelve cuántos clips quedaron guardados."""
+                   grid=None, verify_demo: str = "") -> int:
+    """Graba un clip por lata. Devuelve cuántos clips quedaron guardados.
+
+    Con verify_demo, CS2 además graba esa demo: de ahí se puede leer dónde cayó de verdad cada granada."""
     ffmpeg = ffmpeg_path()
     if not ffmpeg:
         raise RecorderError(tr("Falta ffmpeg para grabar la pantalla."))
@@ -249,12 +295,17 @@ def record_lineups(map_name: str, lineups: list, log_cb: Callable[[str], None], 
     saved = 0
     temp = data_dir() / "temporal"
     temp.mkdir(exist_ok=True)
+    if verify_demo:
+        con.send(f"record {verify_demo}")
     for index, lineup in enumerate(lineups, start=1):
         if should_stop():
             break
         log_cb(tr("Grabando {0} de {1}: {2}").format(index, len(lineups), lineup.title))
         if _record_one(con, ffmpeg, lineup, temp, grid):
             saved += 1
+    if verify_demo:
+        con.send("stop")
+        time.sleep(2)
     con.send(HUD_RESTORE)
     con.close()
     close_capture()
@@ -321,7 +372,7 @@ def close_capture() -> None:
 
 class WindowRecorder:
     """Graba solo la ventana de CS2 con Windows Graphics Capture (lo de arriba, como otras ventanas, no sale)
-    y la manda a ffmpeg, que arma el WebP animado directamente."""
+    y la manda a ffmpeg, que arma un MP4: pesa mucho menos que un WebP animado y se reproduce más fluido."""
 
     def __init__(self, ffmpeg: str, out: Path, fps: int = CLIP_FPS):
         self.ffmpeg, self.out, self.fps = ffmpeg, out, fps
@@ -356,7 +407,7 @@ class WindowRecorder:
         source_h, source_w = self.capture.latest.shape[:2]
         width = min(CLIP_WIDTH, source_w)
         height = int(source_h * width / source_w) // 2 * 2
-        # En vivo se graba un video rápido de comprimir (así no se pierden cuadros); el WebP se arma al final.
+        # En vivo se graba un video rápido de comprimir (así no se pierden cuadros); el definitivo se arma al final.
         self.process = subprocess.Popen(
             [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgra",
              "-s", f"{width}x{height}", "-r", str(self.fps), "-i", "-",
@@ -377,8 +428,8 @@ class WindowRecorder:
             time.sleep(max(0.0, next_time - time.perf_counter()))
 
     def stop(self, on_done: Callable[[bool], None] | None = None) -> bool:
-        """Corta la grabación y arma el WebP en segundo plano (tarda más que el clip). Devuelve si se grabó el video;
-        on_done(ok) avisa cuando el WebP quedó listo."""
+        """Corta la grabación y arma el clip en segundo plano. Devuelve si se grabó el video;
+        on_done(ok) avisa cuando quedó listo."""
         self.running = False
         if self.writer:
             self.writer.join(timeout=5)
@@ -397,10 +448,13 @@ class WindowRecorder:
         return True
 
     def _encode(self, on_done) -> None:
-        partial = self.out.with_suffix(".parcial.webp")
+        partial = self.out.with_suffix(".parcial.mp4")
         try:
             subprocess.run([self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(self.raw),
-                            "-c:v", "libwebp_anim", "-loop", "0", "-quality", "70", "-f", "webp", str(partial)],
+                            # Se recorta parejo: saca los datos de rendimiento de los bordes y la mira sigue en el centro.
+                            "-vf", f"crop=iw*{CLIP_CROP}:ih*{CLIP_CROP},scale={CLIP_WIDTH}:-2:flags=lanczos",
+                            "-c:v", "libx264", "-preset", "slow", "-crf", "26", "-pix_fmt", "yuv420p", "-an",
+                            "-g", "30", "-movflags", "+faststart", str(partial)],
                            check=True, timeout=600, creationflags=NO_WINDOW)
             partial.replace(self.out)
             ok = True
@@ -417,7 +471,7 @@ ENCODING: list[threading.Thread] = []
 
 
 def wait_encoding() -> None:
-    """Espera a que terminen de armarse los WebP que quedaron en segundo plano."""
+    """Espera a que terminen de armarse los clips que quedaron en segundo plano."""
     while ENCODING:
         ENCODING.pop().join()
 
@@ -432,28 +486,6 @@ def landing_view(main: dict) -> tuple[str, str]:
     yaw = math.degrees(math.atan2(ly - cy, lx - cx))
     pitch = math.degrees(math.atan2(cz - lz, math.hypot(lx - cx, ly - cy)))  # positivo = mirar hacia abajo
     return f"setpos {cx:.1f} {cy:.1f} {cz - EYE:.1f}", f"setang {pitch:.1f} {yaw:.1f} 0"   # en noclip, pies = ojos - EYE
-
-
-def _approach(con: NetCon, lineup, path, window: WindowRecorder) -> list[float]:
-    """La cámara camina hacia el lugar de tiro mirando el piso donde hay que pararse. Devuelve el tramo [desde, hasta]."""
-    (dx, dy), distance = path
-    x, y, z = lineup.pos
-    floor = z - EYE
-    start = window.elapsed()
-    stop = min(APPROACH_STOP, distance * 0.45)
-    steps = int(APPROACH_SECONDS * CLIP_FPS)
-    for i in range(steps + 1):
-        t = i / steps
-        ease = t * t * (3 - 2 * t)
-        d = distance + (stop - distance) * ease
-        cx, cy = x + dx * d, y + dy * d
-        yaw = math.degrees(math.atan2(y - cy, x - cx))
-        pitch = math.degrees(math.atan2(CAMERA_UP - 2, d))     # positivo = mirar hacia abajo, al piso del lugar
-        # En noclip setpos ubica los pies: los ojos (la cámara) quedan EYE unidades más arriba.
-        con.push(f"setpos {cx:.1f} {cy:.1f} {floor + CAMERA_UP - EYE:.1f}; setang {pitch:.1f} {yaw:.1f} 0")
-        time.sleep(max(0.0, start + APPROACH_SECONDS * t - window.elapsed()))
-    con.drain()
-    return [round(start, 2), round(window.elapsed(), 2)]
 
 
 def _look_around(con: NetCon, lineup, window: WindowRecorder) -> list[float]:
@@ -474,54 +506,159 @@ def _look_around(con: NetCon, lineup, window: WindowRecorder) -> list[float]:
     return [round(start, 2), round(window.elapsed(), 2)]
 
 
+def _walk_to(con: NetCon, lineup, route: list[tuple[float, float, float]], window) -> tuple[list[float], tuple[float, float], float, tuple[float, float]]:
+    """Camina de verdad, con la física del juego, siguiendo la ruta hasta el lugar de tiro; al final mira el piso de ese lugar.
+
+    Devuelve el tramo [desde, hasta], hacia dónde quedó mirando (pitch, yaw), cuánto le faltó para llegar y dónde quedó."""
+    tx, ty = route[-1][:2]
+    x, y = route[0][:2]
+    begin = window.elapsed()
+    last_good, moved_from = begin, (x, y)
+    yaw = math.degrees(math.atan2(route[1][1] - y, route[1][0] - x))
+    pitch = 0.0
+    slow = False
+    buffer = ""
+    frame = 0
+    point = 1
+    con.sock.settimeout(0.001)
+    con.push("+forward")
+    distance = math.dist((x, y), (tx, ty))
+    while window.elapsed() - begin < WALK_TIMEOUT:
+        try:
+            buffer += con.sock.recv(65536).decode("utf-8", "replace")
+        except OSError:
+            pass
+        found = POSITION.findall(buffer)
+        if found:
+            x, y = float(found[-1][0]), float(found[-1][1])
+            buffer = ""
+        distance = math.dist((x, y), (tx, ty))
+        if distance <= WALK_ARRIVED:
+            break
+        if math.dist((x, y), moved_from) >= 8:
+            last_good, moved_from = window.elapsed(), (x, y)
+        elif window.elapsed() - last_good > WALK_STUCK:
+            break   # chocó con algo que las demos no muestran
+        while point < len(route) - 1 and math.dist((x, y), route[point][:2]) < ROUTE_AHEAD:
+            point += 1
+        if distance < WALK_SLOW and not slow:
+            con.push("+speed")
+            slow = True
+        wanted = math.degrees(math.atan2(route[point][1] - y, route[point][0] - x))
+        yaw += ((wanted - yaw + 180) % 360 - 180) * 0.12        # gira de a poco, como una mano en el mouse
+        look = math.degrees(math.atan2(EYE, max(distance, 1.0))) if distance < WALK_LOOK else 0.0
+        pitch += (min(WALK_MAX_PITCH, look) - pitch) * 0.08
+        command = f"setang {pitch:.2f} {yaw:.2f} 0"
+        frame += 1
+        if frame % 3 == 0:
+            command += "; getpos"
+        con.push(command)
+        time.sleep(1 / CAMERA_RATE)
+    con.push("-forward; -speed")
+    time.sleep(0.15)
+    con.sock.settimeout(0.2)
+    con.drain()
+    return [round(begin, 2), round(window.elapsed(), 2)], (pitch, yaw), round(distance), (x, y)
+
+
+class _Clock:
+    """Reloj para ensayar la caminata sin estar grabando."""
+
+    def __init__(self):
+        self.begin = time.perf_counter()
+
+    def elapsed(self) -> float:
+        return time.perf_counter() - self.begin
+
+
+def _place_at_start(con: NetCon, route: list[tuple[float, float, float]]) -> tuple[float, float]:
+    sx, sy, sz = route[0]
+    facing = (0.0, math.degrees(math.atan2(route[1][1] - sy, route[1][0] - sx)))
+    con.send(f"setpos {sx:.1f} {sy:.1f} {sz + EYE:.1f}; setang {facing[0]:.2f} {facing[1]:.2f} 0")
+    return facing
+
+
+def rehearsed_route(con: NetCon, lineup, grid) -> list[tuple[float, float, float]] | None:
+    """Ensaya la caminata antes de grabar. Si se traba con algo que las demos no muestran, bloquea esa zona y busca otra ruta."""
+    from .parser import GRID
+    blocked: set[tuple[int, int]] = set()
+    best, best_short = None, math.inf
+    for _ in range(REHEARSALS):
+        route = walking_route(lineup, grid, blocked)
+        if not route:
+            break
+        _place_at_start(con, route)
+        time.sleep(0.7)
+        _span, _facing, short, spot = _walk_to(con, lineup, route, _Clock())
+        if short < best_short:
+            best, best_short = route, short
+        if short <= WALK_ENOUGH:
+            break
+        cell = (int(spot[0] // GRID), int(spot[1] // GRID))
+        blocked |= {(cell[0] + i, cell[1] + j) for i in (-1, 0, 1) for j in (-1, 0, 1)}
+    return best
+
+
+def _turn_to(con: NetCon, source: tuple[float, float], target: tuple[float, float], seconds: float = TURN_SECONDS) -> None:
+    """Gira la vista de a poco, por el lado más corto, hasta el punto de mira."""
+    yaw_change = (target[1] - source[1] + 180) % 360 - 180
+    begin = time.perf_counter()
+    while (share := (time.perf_counter() - begin) / seconds) < 1:
+        ease = share * share * (3 - 2 * share)
+        con.push(f"setang {source[0] + (target[0] - source[0]) * ease:.2f} {source[1] + yaw_change * ease:.2f} 0")
+        time.sleep(1 / CAMERA_RATE)
+    con.push(f"setang {target[0]:.2f} {target[1]:.2f} 0")
+    con.drain()
+
+
 def _record_one(con: NetCon, ffmpeg: str, lineup, temp: Path, grid=None) -> bool:
     x, y, z = lineup.pos                    # altura de los ojos, como la pide setpos
     pitch, yaw = lineup.ang
     crouch = lineup.movement.startswith("crouched")
-    path = approach_path(lineup, grid)
     con.send("ent_fire smokegrenade_projectile kill; ent_fire inferno kill; ent_fire molotov_projectile kill; "
              "ent_fire flashbang_projectile kill")
     con.send(f"give {WEAPONS[lineup.type]}")
-    con.send("slot4; cl_drawhud 0")
-    if path:
-        (dx, dy), distance = path
-        con.send("noclip 1; r_drawviewmodel 0")   # sin las manos, para que se vea el piso donde pararse
-        con.send(f"setpos {x + dx * distance:.1f} {y + dy * distance:.1f} {z - 2 * EYE + CAMERA_UP:.1f}")
+    con.send("slot4; cl_drawhud 0; r_drawviewmodel 1")
+    route = rehearsed_route(con, lineup, grid)
+    facing = (35.0, yaw + 180)
+    if route:
+        facing = _place_at_start(con, route)
     else:
-        con.send("r_drawviewmodel 0")
         con.send(f"setpos {x:.2f} {y:.2f} {z:.2f}")
-        con.send(f"setang 35 {yaw + 180:.2f} 0")
-    time.sleep(0.8)
+        con.send(f"setang {facing[0]:.2f} {facing[1]:.2f} 0")
+    time.sleep(1.0)                         # que apoye los pies antes de arrancar
     linger = {"smoke": 1.5, "molotov": 1.5, "flash": 0.4, "he": 0.6}[lineup.type]   # después de que explota
     flight = min(lineup.flight or 3.0, 9.0)
-    window = WindowRecorder(ffmpeg, clips_dir() / f"{lineup.id}.webp")   # lo grabado va siempre a tu carpeta
+    window = WindowRecorder(ffmpeg, clips_dir() / f"{lineup.id}.mp4")   # lo grabado va siempre a tu carpeta
     if not window.start() or not window.ready.wait(5):
         window.stop()
         return False
-    meta = {"fps": CLIP_FPS, "position": None, "position_mode": "approach" if path else "around"}
-    if path:
-        meta["position"] = _approach(con, lineup, path, window)
-        con.send("noclip 0; r_drawviewmodel 1")
+    meta = {"fps": CLIP_FPS, "position": None, "position_mode": "walk" if route else "around"}
+    if route:
+        meta["position"], facing, meta["short"], _spot = _walk_to(con, lineup, route, window)
     else:
         meta["position"] = _look_around(con, lineup, window)
-        con.send("r_drawviewmodel 1")
+        facing = (pitch, yaw)
     if crouch:
         con.send("+duck")
-    con.send(f"setpos {x:.2f} {y:.2f} {z:.2f}; setang {pitch:.2f} {yaw:.2f} 0")
+    con.send(f"setpos {x:.2f} {y:.2f} {z:.2f}")
     aim_start = window.elapsed()
-    time.sleep(1.2)                         # se ve la mira quieta en el punto antes de tirar
+    _turn_to(con, facing, (pitch, yaw))
+    time.sleep(1.0)                         # se ve la mira quieta en el punto antes de tirar
     con.send(f"setang {pitch:.2f} {yaw:.2f} 0")
+    throw_start = window.elapsed()
+    meta["aim"] = [round(aim_start, 2), round(throw_start, 2)]
     con.send("+attack; +attack2" if lineup.technique.startswith("both") else "+attack")
-    time.sleep(1.0)                         # tirar del seguro
-    meta["aim"] = [round(aim_start, 2), round(window.elapsed(), 2)]
+    time.sleep(0.6)                         # tirar del seguro
     for command, wait in _release_steps(lineup):
         con.send(command)
         time.sleep(wait)
+    meta["throw"] = [round(throw_start, 2), round(window.elapsed() + 0.3, 2)]
     if crouch:
         con.send("-duck")
     time.sleep(min(flight, 2.0))            # se ve salir la granada desde tus ojos
     position, angle = landing_view(lineup.main)
-    con.send("noclip 1")                    # la cámara flota sobre el punto de caída
+    con.send("noclip 1; r_drawviewmodel 0")  # la cámara se pasa arriba del punto de caída, sin armas en la mano
     con.send(position)
     con.send(angle)
     time.sleep(max(0.0, flight - 2.0) + linger)
@@ -530,4 +667,4 @@ def _record_one(con: NetCon, ffmpeg: str, lineup, temp: Path, grid=None) -> bool
     if not recorded:
         return False
     (clips_dir() / f"{lineup.id}.json").write_text(json.dumps(meta), encoding="utf-8")
-    return True    # el WebP se termina de armar en segundo plano (wait_encoding)
+    return True    # el clip se termina de armar en segundo plano (wait_encoding)

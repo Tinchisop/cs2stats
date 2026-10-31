@@ -241,6 +241,52 @@ class RankTest(unittest.TestCase):
         self.assertTrue(all("rating" in p["stats"] for p in others))
 
 
+class ClipsDeLatasTest(unittest.TestCase):
+    def test_fases_del_clip(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from cs2stats.ui.nades_page import clip_phase
+        meta = {"fps": 60, "position": [0.0, 2.0], "position_mode": "walk", "aim": [2.0, 4.0], "throw": [4.0, 5.0]}
+        self.assertEqual([clip_phase(int(s * 60), meta) for s in (0.5, 3, 4.5, 8)], ["position", "aim", "throw", "land"])
+        self.assertEqual(clip_phase(-1, meta), "")
+        self.assertEqual(clip_phase(30, {**meta, "position_mode": "around"}), "around")
+
+    def test_ruta_rodea_lo_que_no_se_puede_pisar(self):
+        from types import SimpleNamespace
+        from cs2stats.nades import MapGrid
+        from cs2stats.parser import GRID
+        from cs2stats.recorder import EYE, WALK_MIN, walking_route
+        lineup = SimpleNamespace(pos=[24.0, 24.0, 64.0], ang=[0.0, 0.0])
+        # Un pasillo en U: para llegar al lugar hay que dar la vuelta, no cruzar el hueco del medio.
+        cells = [[i, 0, 0.0, "", 5] for i in range(0, 4)] + [[3, j, 0.0, "", 5] for j in range(1, 6)] + [[i, 5, 0.0, "", 5] for i in range(0, 3)]
+        route = walking_route(lineup, MapGrid(cells))
+        self.assertEqual(route[-1], (24.0, 24.0, 64.0 - EYE))
+        self.assertEqual(int(route[0][1] // GRID), 5)   # arranca del otro lado de la U
+        self.assertGreaterEqual(len(route) * GRID, WALK_MIN)
+        for x, y, _z in route[:-1]:
+            self.assertIn((int(x // GRID), int(y // GRID)), {(c[0], c[1]) for c in cells})
+        self.assertIsNone(walking_route(lineup, MapGrid([])))
+        # Un techo: la celda de abajo no conecta con el lugar de tiro.
+        self.assertIsNone(walking_route(lineup, MapGrid([[0, 0, 0.0, "", 5], [1, 0, 300.0, "", 5], [2, 0, 300.0, "", 5], [3, 0, 300.0, "", 5]])))
+
+    def test_propone_solo_tiros_repetidos_por_varios(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("latas_desde_demos", Path(__file__).parent.parent / "tools" / "latas_desde_demos.py")
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+
+        def throw(player, land_x=4000.0):
+            return {"type": "flash", "steamid": player, "side": "T", "pos": [5000.0, 5000.0, 0.0], "ang": [-10.0, 90.0],
+                    "land": [land_x, 4000.0, 0.0], "flight": 1.5, "air": False, "duck": False, "speed": 0}
+        grid = [[int(5000 // tool.GRID), int(5000 // tool.GRID), 0.0, "TSpawn", 9], [int(4000 // tool.GRID), int(4000 // tool.GRID), 0.0, "Middle", 9]]
+        repeated = [{"map": "de_mirage", "grenades": [throw(1), throw(2), throw(1)], "grid": grid}]
+        found = tool.propose(repeated)
+        self.assertEqual([p["type"] for p in found], ["flash"])
+        self.assertEqual(found[0]["pos"], [5000.0, 5000.0, 64.0])
+        self.assertNotIn("steamid", found[0])
+        alone = [{"map": "de_mirage", "grenades": [throw(1), throw(1), throw(1)], "grid": grid}]
+        self.assertEqual(tool.propose(alone), [])
+
+
 class LatasTest(unittest.TestCase):
     def test_lista_de_latas(self):
         from cs2stats.nades import load_lineups

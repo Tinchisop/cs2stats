@@ -2640,46 +2640,6 @@
   ]
  },
  {
-  "id": "anubis-connector-from-t-upper",
-  "map": "de_anubis",
-  "type": "smoke",
-  "side": "T",
-  "to": "Conector",
-  "frm": "T arriba",
-  "technique": "left",
-  "movement": "stationary",
-  "pos": [
-   1279.321045,
-   571.968872,
-   65.788254
-  ],
-  "ang": [
-   -11.477298,
-   125.519043
-  ],
-  "land": [
-   584.8,
-   1257.1,
-   -85.7
-  ],
-  "flight": 3.0,
-  "steps": [
-   "Parate en el borde de la pared",
-   "Apuntá a la parte de arriba del arco",
-   "Soltá con clic izquierdo"
-  ],
-  "move_key": "",
-  "move_time": 0.0,
-  "source": "https://csnades.gg/anubis/smokes/connector-from-t-upper",
-  "to_en": "Connector",
-  "frm_en": "T Upper",
-  "steps_en": [
-   "Stand at edge of wall",
-   "Aim at top of arch",
-   "Release with left click"
-  ]
- },
- {
   "id": "anubis-platform-from-water",
   "map": "de_anubis",
   "type": "smoke",
@@ -3040,46 +3000,6 @@
   ]
  },
  {
-  "id": "nuke-ct-red-from-under-silo",
-  "map": "de_nuke",
-  "type": "smoke",
-  "side": "T",
-  "to": "Cruce (CT Red)",
-  "frm": "Bajo Silo",
-  "technique": "left",
-  "movement": "stationary",
-  "pos": [
-   -141.270569,
-   -1962.644165,
-   -351.96875
-  ],
-  "ang": [
-   -36.34819,
-   17.487387
-  ],
-  "land": [
-   1162.1,
-   -1529.5,
-   -414.0
-  ],
-  "flight": 4.4,
-  "steps": [
-   "Parate al lado de la línea, sobre el punto",
-   "Apuntá al soporte del silo",
-   "Soltá con clic izquierdo"
-  ],
-  "move_key": "",
-  "move_time": 0.0,
-  "source": "https://csnades.gg/nuke/smokes/ct-red-from-under-silo",
-  "to_en": "CT Red",
-  "frm_en": "Under Silo",
-  "steps_en": [
-   "Stand next to line on dot",
-   "Aim at silo support",
-   "Release with left click"
-  ]
- },
- {
   "id": "nuke-secret-far-from-t-spawn",
   "map": "de_nuke",
   "type": "smoke",
@@ -3157,46 +3077,6 @@
    "Stand in corner",
    "Align below edge of air conduit, just above height of vents",
    "Jump and release with left click at the same time (jumpthrow)"
-  ]
- },
- {
-  "id": "nuke-hut-roof-from-silo",
-  "map": "de_nuke",
-  "type": "molotov",
-  "side": "T",
-  "to": "Techo de Hut",
-  "frm": "Silo",
-  "technique": "left",
-  "movement": "stationary",
-  "pos": [
-   -19.397888,
-   -1461.60376,
-   17.179848
-  ],
-  "ang": [
-   -11.131254,
-   29.823231
-  ],
-  "land": [
-   324.0,
-   -987.4,
-   -124.0
-  ],
-  "flight": 2.1,
-  "steps": [
-   "Subite al soporte del silo",
-   "Apuntá a la punta de la línea",
-   "Soltá con clic izquierdo"
-  ],
-  "move_key": "",
-  "move_time": 0.0,
-  "source": "https://csnades.gg/nuke/molotovs/hut-roof-from-silo",
-  "to_en": "Hut Roof",
-  "frm_en": "Silo",
-  "steps_en": [
-   "Stand on silo support",
-   "Aim at top of line",
-   "Release with left click"
   ]
  },
  {
@@ -3757,6 +3637,1006 @@
    "Stand in the back corner of T Spawn, against both walls",
    "Put your crosshair on the spot marked in the clip, on the roof ahead",
    "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "ancient-smokes-topofmid-from-tspawn",
+  "map": "de_ancient",
+  "type": "smoke",
+  "side": "T",
+  "to": "Top Mid",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -391.9,
+   -2071.3,
+   -79
+  ],
+  "ang": [
+   -25.54,
+   92.64
+  ],
+  "land": [
+   -506.3,
+   258.2,
+   162.0
+  ],
+  "flight": 5.4,
+  "steps": [
+   "Parate en Spawn T, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Top Mid",
+  "frm_en": "Spawn T",
+  "steps_en": [
+   "Stand in Spawn T, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-flashes-bombsiteb-from-outsidelong",
+  "map": "de_anubis",
+  "type": "flash",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Afuera de Long",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1267.9,
+   -314.4,
+   71
+  ],
+  "ang": [
+   -25.3,
+   89.15
+  ],
+  "land": [
+   -1132.4,
+   362.4,
+   329.0
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Afuera de Long, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Afuera de Long",
+  "steps_en": [
+   "Stand in Afuera de Long, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "anubis-smokes-bombsiteb-from-ruins",
+  "map": "de_anubis",
+  "type": "smoke",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Ruins",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1151.9,
+   -1144.0,
+   133
+  ],
+  "ang": [
+   -61.55,
+   81.68
+  ],
+  "land": [
+   -893.9,
+   620.2,
+   -2.0
+  ],
+  "flight": 8.4,
+  "steps": [
+   "Parate en Ruins, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Ruins",
+  "steps_en": [
+   "Stand in Ruins, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "cache-hes-bmain-from-heaven",
+  "map": "de_cache",
+  "type": "he",
+  "side": "CT",
+  "to": "BMain",
+  "frm": "Heaven",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -497.0,
+   -671.6,
+   1860
+  ],
+  "ang": [
+   12.32,
+   -3.15
+  ],
+  "land": [
+   417.6,
+   -725.1,
+   1663.2
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Heaven, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "BMain",
+  "frm_en": "Heaven",
+  "steps_en": [
+   "Stand in Heaven, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "cache-smokes-bmain-from-heaven",
+  "map": "de_cache",
+  "type": "smoke",
+  "side": "CT",
+  "to": "BMain",
+  "frm": "Heaven",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -479.5,
+   -716.2,
+   1861
+  ],
+  "ang": [
+   12.8,
+   3.05
+  ],
+  "land": [
+   401.4,
+   -661.9,
+   1614.0
+  ],
+  "flight": 3.0,
+  "steps": [
+   "Parate en Heaven, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "BMain",
+  "frm_en": "Heaven",
+  "steps_en": [
+   "Stand in Heaven, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "dust2-flashes-bombsiteb-from-uppertunnel",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Túneles de arriba",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -1726.8,
+   1315.0,
+   103
+  ],
+  "ang": [
+   -70.47,
+   88.05
+  ],
+  "land": [
+   -1723.1,
+   1756.9,
+   452.7
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Túneles de arriba, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Túneles de arriba",
+  "steps_en": [
+   "Stand in Túneles de arriba, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-flashes-longdoors-from-outsidelong",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "T",
+  "to": "Puertas de Long",
+  "frm": "Afuera de Long",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   363.6,
+   -382.6,
+   82
+  ],
+  "ang": [
+   -13.55,
+   63.95
+  ],
+  "land": [
+   794.0,
+   549.5,
+   531.8
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Afuera de Long, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Puertas de Long",
+  "frm_en": "Afuera de Long",
+  "steps_en": [
+   "Stand in Afuera de Long, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-flashes-middoors-from-lowertunnel",
+  "map": "de_dust2",
+  "type": "flash",
+  "side": "T",
+  "to": "Mid Doors",
+  "frm": "Túneles de abajo",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -580.2,
+   1360.6,
+   -44
+  ],
+  "ang": [
+   -25.95,
+   41.4
+  ],
+  "land": [
+   -340.5,
+   1664.4,
+   56.3
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Túneles de abajo, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Mid Doors",
+  "frm_en": "Túneles de abajo",
+  "steps_en": [
+   "Stand in Túneles de abajo, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "dust2-smokes-longdoors-from-tspawn",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Puertas de Long",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -342.2,
+   -660.0,
+   166
+  ],
+  "ang": [
+   -28.84,
+   52.75
+  ],
+  "land": [
+   1079.7,
+   1161.0,
+   159.2
+  ],
+  "flight": 6.0,
+  "steps": [
+   "Parate en Spawn T, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Puertas de Long",
+  "frm_en": "Spawn T",
+  "steps_en": [
+   "Stand in Spawn T, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-smokes-longdoors-from-undera",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Puertas de Long",
+  "frm": "Under A",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1005.0,
+   2380.0,
+   86
+  ],
+  "ang": [
+   -24.54,
+   -102.05
+  ],
+  "land": [
+   529.5,
+   650.7,
+   3.4
+  ],
+  "flight": 6.1,
+  "steps": [
+   "Parate en Under A, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Puertas de Long",
+  "frm_en": "Under A",
+  "steps_en": [
+   "Stand in Under A, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-smokes-middle-from-tspawn",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Mid",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -507.8,
+   -662.0,
+   207
+  ],
+  "ang": [
+   -4.26,
+   84.62
+  ],
+  "land": [
+   -271.1,
+   1413.4,
+   -26.9
+  ],
+  "flight": 5.5,
+  "steps": [
+   "Parate en Spawn T, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Mid",
+  "frm_en": "Spawn T",
+  "steps_en": [
+   "Stand in Spawn T, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "dust2-smokes-undera-from-longdoors",
+  "map": "de_dust2",
+  "type": "smoke",
+  "side": "T",
+  "to": "Under A",
+  "frm": "Puertas de Long",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   895.1,
+   1070.9,
+   65
+  ],
+  "ang": [
+   -55.66,
+   80.06
+  ],
+  "land": [
+   1162.2,
+   2159.7,
+   3.8
+  ],
+  "flight": 5.6,
+  "steps": [
+   "Parate en Puertas de Long, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Under A",
+  "frm_en": "Puertas de Long",
+  "steps_en": [
+   "Stand in Puertas de Long, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "inferno-flashes-bombsiteb-from-banana",
+  "map": "de_inferno",
+  "type": "flash",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Banana",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   479.0,
+   2017.0,
+   201
+  ],
+  "ang": [
+   -41.46,
+   93.82
+  ],
+  "land": [
+   443.8,
+   2544.2,
+   237.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Banana, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Banana",
+  "steps_en": [
+   "Stand in Banana, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "inferno-molotovs-apartments-from-apartments",
+  "map": "de_inferno",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Apartamentos",
+  "frm": "Apartamentos",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   1874.8,
+   -267.6,
+   324
+  ],
+  "ang": [
+   0.88,
+   -171.61
+  ],
+  "land": [
+   1179.0,
+   -370.2,
+   260.0
+  ],
+  "flight": 1.1,
+  "steps": [
+   "Parate en Apartamentos, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Apartamentos",
+  "frm_en": "Apartamentos",
+  "steps_en": [
+   "Stand in Apartamentos, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "inferno-molotovs-bombsiteb-from-banana",
+  "map": "de_inferno",
+  "type": "molotov",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Banana",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   479.0,
+   2017.0,
+   201
+  ],
+  "ang": [
+   -36.42,
+   134.7
+  ],
+  "land": [
+   410.9,
+   2491.7,
+   275.5
+  ],
+  "flight": 2.1,
+  "steps": [
+   "Parate en Banana, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Banana",
+  "steps_en": [
+   "Stand in Banana, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "inferno-smokes-banana-from-ctspawn",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Banana",
+  "frm": "Spawn CT",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   2397.0,
+   2079.0,
+   197
+  ],
+  "ang": [
+   -42.22,
+   -178.25
+  ],
+  "land": [
+   353.4,
+   1788.4,
+   128.2
+  ],
+  "flight": 9.1,
+  "steps": [
+   "Parate en Spawn CT, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Banana",
+  "frm_en": "Spawn CT",
+  "steps_en": [
+   "Stand in Spawn CT, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "inferno-smokes-bombsiteb-from-banana",
+  "map": "de_inferno",
+  "type": "smoke",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Banana",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   607.9,
+   1890.8,
+   210
+  ],
+  "ang": [
+   -5.65,
+   70.4
+  ],
+  "land": [
+   958.4,
+   2723.0,
+   134.5
+  ],
+  "flight": 2.5,
+  "steps": [
+   "Parate en Banana, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Banana",
+  "steps_en": [
+   "Stand in Banana, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "mirage-flashes-palaceinterior-from-palacealley",
+  "map": "de_mirage",
+  "type": "flash",
+  "side": "T",
+  "to": "Palacio",
+  "frm": "Palacio",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   839.3,
+   -1036.1,
+   -189
+  ],
+  "ang": [
+   -39.3,
+   -148.59
+  ],
+  "land": [
+   166.9,
+   -1446.7,
+   169.2
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Palacio, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Palacio",
+  "frm_en": "Palacio",
+  "steps_en": [
+   "Stand in Palacio, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "mirage-flashes-tramp-from-palacealley",
+  "map": "de_mirage",
+  "type": "flash",
+  "side": "T",
+  "to": "Rampa T",
+  "frm": "Palacio",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   821.4,
+   -1036.1,
+   -192
+  ],
+  "ang": [
+   -41.61,
+   -145.52
+  ],
+  "land": [
+   195.6,
+   -1465.9,
+   196.6
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Palacio, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Rampa T",
+  "frm_en": "Palacio",
+  "steps_en": [
+   "Stand in Palacio, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "mirage-molotovs-apartments-from-bombsiteb",
+  "map": "de_mirage",
+  "type": "molotov",
+  "side": "CT",
+  "to": "Apartamentos",
+  "frm": "Sitio B",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -2094.9,
+   419.7,
+   -96
+  ],
+  "ang": [
+   -13.61,
+   27.25
+  ],
+  "land": [
+   -1332.5,
+   811.0,
+   -78.0
+  ],
+  "flight": 1.9,
+  "steps": [
+   "Parate en Sitio B, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Apartamentos",
+  "frm_en": "Sitio B",
+  "steps_en": [
+   "Stand in Sitio B, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "mirage-smokes-apartments-from-bombsiteb",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "CT",
+  "to": "Apartamentos",
+  "frm": "Sitio B",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -2074.5,
+   433.0,
+   -96
+  ],
+  "ang": [
+   -12.9,
+   27.25
+  ],
+  "land": [
+   -1355.9,
+   797.2,
+   -78.0
+  ],
+  "flight": 2.3,
+  "steps": [
+   "Parate en Sitio B, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Apartamentos",
+  "frm_en": "Sitio B",
+  "steps_en": [
+   "Stand in Sitio B, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "mirage-smokes-bombsitea-from-palacealley",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Sitio A",
+  "frm": "Palacio",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   815.8,
+   -1491.8,
+   -45
+  ],
+  "ang": [
+   -26.07,
+   -176.34
+  ],
+  "land": [
+   -709.9,
+   -1600.7,
+   -166.0
+  ],
+  "flight": 5.6,
+  "steps": [
+   "Parate en Palacio, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio A",
+  "frm_en": "Palacio",
+  "steps_en": [
+   "Stand in Palacio, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
+  ]
+ },
+ {
+  "id": "mirage-smokes-bombsiteb-from-backalley",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Sitio B",
+  "frm": "Back Alley",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   -160.1,
+   888.0,
+   -63
+  ],
+  "ang": [
+   -42.48,
+   -150.66
+  ],
+  "land": [
+   -2297.8,
+   -248.4,
+   -166.0
+  ],
+  "flight": 7.8,
+  "steps": [
+   "Parate en Back Alley, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio B",
+  "frm_en": "Back Alley",
+  "steps_en": [
+   "Stand in Back Alley, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "mirage-smokes-catwalk-from-tspawn",
+  "map": "de_mirage",
+  "type": "smoke",
+  "side": "T",
+  "to": "Short",
+  "frm": "Spawn T",
+  "technique": "left_jump",
+  "movement": "stationary",
+  "pos": [
+   1423.0,
+   -56.0,
+   -91
+  ],
+  "ang": [
+   -20.88,
+   -168.69
+  ],
+  "land": [
+   -710.2,
+   -576.3,
+   -269.9
+  ],
+  "flight": 6.0,
+  "steps": [
+   "Parate en Spawn T, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Saltá y soltá con clic izquierdo al mismo tiempo (jumpthrow)"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Short",
+  "frm_en": "Spawn T",
+  "steps_en": [
+   "Stand in Spawn T, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Jump and release with left click at the same time (jumpthrow)"
+  ]
+ },
+ {
+  "id": "nuke-hes-bombsitea-from-lobby",
+  "map": "de_nuke",
+  "type": "he",
+  "side": "T",
+  "to": "Sitio A",
+  "frm": "Lobby",
+  "technique": "left",
+  "movement": "stationary",
+  "pos": [
+   -455.9,
+   -1007.8,
+   -352
+  ],
+  "ang": [
+   4.9,
+   -20.91
+  ],
+  "land": [
+   195.9,
+   -1301.2,
+   -412.3
+  ],
+  "flight": 1.7,
+  "steps": [
+   "Parate en Lobby, en el lugar que marca el clip",
+   "Apuntá adonde marca el clip",
+   "Soltá con clic izquierdo, sin moverte"
+  ],
+  "move_key": "",
+  "move_time": 0.0,
+  "source": "demos",
+  "to_en": "Sitio A",
+  "frm_en": "Lobby",
+  "steps_en": [
+   "Stand in Lobby, on the spot the clip marks",
+   "Aim where the clip marks",
+   "Release with left click, without moving"
   ]
  }
 ]

@@ -17,7 +17,7 @@ Todo corre en tu PC con herramientas oficiales de Valve. Nunca lee ni toca la me
 * **FACEIT aparte de Premier:** con una clave gratis de la API de datos de FACEIT, la app trae tu nivel, tu ELO (y cómo cambia) y tus partidas de FACEIT con K/D, ADR y HS %. Con el filtro de modo de arriba cada modo muestra sus números por separado; arranca en Premier y recuerda el que elijas.
 * **Comparación con tu rango:** cada métrica contra jugadores de tu mismo color de Premier sacados de tus propias demos, con dónde destacás y dónde estás por debajo.
 * **Consejos** armados con tus números, con qué tan confiable es cada uno.
-* **Latas:** las smokes, molotovs y flashes más conocidas de Mirage, Dust II, Inferno, Ancient, Anubis, Nuke y Cache, cada una probada en CS2, con el nombre del call (Ventana, Jungla, Cabezinha, CT, Triple, Caja de fuego, L...). Cada lata tiene un clip grabado en el juego en tres partes (dónde pararte, adónde apuntar y cómo cae), los pasos y cuántas veces se tiró en tus partidas. Con un clic se ve en pantalla completa.
+* **Latas:** smokes, molotovs, flashes y HE de Mirage, Dust II, Inferno, Ancient, Anubis, Nuke y Cache, cada una probada en CS2, con el nombre del call (Ventana, Jungla, Cabezinha, CT, Triple, Caja de fuego, L...). Cada lata tiene un clip de 60 cuadros por segundo grabado en el juego en primera persona: caminás hasta el lugar, apuntás, tirás y ves cómo cae, con la señal de cada paso. También trae los pasos y cuántas veces se tiró en tus partidas. Con un clic se ve en pantalla completa.
 * **Mensaje de Steam al terminar cada partida:** tu cuenta secundaria te escribe por el chat, como un amigo, con lo mejor de tu partida (multikills, clutches, récords de ADR).
 * **Repetición 2D de cada partida:** los 10 jugadores sobre el mapa, ronda por ronda, con barra de tiempo, velocidad, granadas, bomba, disparos y kills, para revisar ejecuciones, rotaciones y retakes.
 * **Jugadas automáticas:** la app busca tus ases, 4K, 3K y clutches ganados, y también tus errores (morir sin disparar, flashes que cegaron a 2 o más compañeros). Cada una se mira como un clip corto de la repetición o se guarda como MP4 o GIF, sin abrir el juego ni bajar la demo de nuevo.
@@ -68,7 +68,7 @@ En `%LOCALAPPDATA%\CS2Stats`: `historial.db` (partidas, rondas, armas y las repe
 
 ## Créditos
 
-Las posiciones de las latas salen de [csnades.gg](https://csnades.gg) (más la smoke a Ventana desde Spawn T, sacada de partidas reales); cada una se tiró en CS2 y solo quedaron las que caen donde tienen que caer. Las fotos e íconos de los mapas se leen de tu CS2 instalado. CS2 Stats no está afiliado a Valve.
+Las posiciones de las latas salen de [csnades.gg](https://csnades.gg) y de tiros que varios jugadores repitieron en partidas reales; cada una se tiró en CS2 y solo quedaron las que caen donde tienen que caer. Las fotos e íconos de los mapas se leen de tu CS2 instalado. CS2 Stats no está afiliado a Valve.
 
 ## Licencia
 

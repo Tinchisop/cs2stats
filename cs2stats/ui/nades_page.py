@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QMovie, QPainter, QPen, QPixmap
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
                                QSizePolicy, QVBoxLayout, QWidget)
 
@@ -13,6 +13,7 @@ from ..metrics import map_label
 from ..nades import TYPE_COLORS, Lineup, MapGrid
 from ..parser import GRID
 from ..recorder import clip_meta, clip_path
+from .clip_player import ClipPlayer
 from .pages import card, chip, clear
 from .theme import ACCENT, MUTED, TEXT, button, fmt_num, label
 from .visual import svg_pixmap
@@ -65,8 +66,7 @@ class LineupRow(QFrame):
         super().__init__(parent)
         self.lineup_id = lineup.id
         self.setObjectName("card")
-        if selected:
-            self.setStyleSheet(f"QFrame#card {{ border: 1px solid {ACCENT}; }}")
+        self.set_selected(selected)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 8, 12, 8)
@@ -89,6 +89,9 @@ class LineupRow(QFrame):
             row.addWidget(chip(t("Clip"), "chipWarn"))
         for child in self.findChildren(QLabel):
             child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def set_selected(self, selected: bool) -> None:
+        self.setStyleSheet(f"QFrame#card {{ border: 1px solid {ACCENT}; }}" if selected else "")
 
     def mousePressEvent(self, _event):  # noqa: N802
         self.clicked.emit(self.lineup_id)
@@ -159,34 +162,27 @@ class RadarView(QWidget):
         painter.drawText(QRectF(b.x() + 12, b.y() - 9, 160, 18), Qt.AlignmentFlag.AlignVCenter, t("Cae acá"))
 
 
-def open_clip(lineup_id: str, parent) -> QMovie:
-    """Carga el clip en memoria: así el archivo queda libre y se puede regrabar mientras la app lo muestra."""
-    buffer = QBuffer(parent)
-    buffer.setData(QByteArray(clip_path(lineup_id).read_bytes()))
-    buffer.open(QIODevice.OpenModeFlag.ReadOnly)
-    return QMovie(buffer, QByteArray(b"webp"), parent)
-
-
 PHASES = {"position": ("1", t("Dónde pararte"), t("Parate acá")), "around": ("1", t("Dónde pararte"), ""),
-          "aim": ("2", t("Adónde apuntar"), t("Apuntá acá")), "throw": ("3", t("Cómo cae"), "")}
+          "aim": ("2", t("Adónde apuntar"), t("Apuntá acá")), "throw": ("3", t("Tirá"), t("Tirá desde acá")),
+          "land": ("4", t("Cómo cae"), "")}
 CAPTIONS = {"around": t("Así se ve el lugar donde te parás")}
 
 
-def clip_phase(movie: QMovie | None, meta: dict) -> str:
-    """En qué tramo del clip va: el .json del clip dice en qué segundos se muestra dónde pararse y adónde apuntar."""
-    if not movie or movie.currentFrameNumber() < 0:
+def clip_phase(number: int, meta: dict) -> str:
+    """En qué tramo del clip va: el .json del clip dice en qué segundos pasa cada cosa."""
+    if number < 0:
         return ""
-    seconds = movie.currentFrameNumber() / meta.get("fps", 20)
-    for phase in ("position", "aim"):
+    seconds = number / meta.get("fps", 60)
+    for phase in ("position", "aim", "throw"):
         span = meta.get(phase)
         if span and span[0] <= seconds < span[1]:
-            # Sin lugar para acercar la cámara, el clip muestra el lugar girando desde ahí mismo.
+            # Sin lugar para caminar, el clip muestra el lugar girando desde ahí mismo.
             return "around" if phase == "position" and meta.get("position_mode") == "around" else phase
-    return "throw" if meta.get("aim") and seconds >= meta["aim"][1] else ""
+    return "land" if meta.get("throw") and seconds >= meta["throw"][1] else ""
 
 
-def paint_clip_overlay(painter: QPainter, rect: QRectF, phase: str, scale: float = 1.0) -> None:
-    """Marca el punto (centro de la pantalla = mira) y el paso del clip en la esquina."""
+def paint_clip_overlay(painter: QPainter, rect: QRectF, phase: str, scale: float = 1.0, technique: str = "") -> None:
+    """Marca el punto (centro de la pantalla = mira), el paso del clip en la esquina y, al tirar, la técnica."""
     if not phase:
         return
     number, title, marker = PHASES[phase]
@@ -205,7 +201,7 @@ def paint_clip_overlay(painter: QPainter, rect: QRectF, phase: str, scale: float
     painter.setPen(QColor(TEXT))
     painter.drawText(box.adjusted(11 * scale + metrics.horizontalAdvance(f"{number}   "), 0, 0, 0),
                      Qt.AlignmentFlag.AlignVCenter, title)
-    caption = CAPTIONS.get(phase)
+    caption = technique.capitalize() if phase == "throw" else CAPTIONS.get(phase)
     if caption:
         width = metrics.horizontalAdvance(caption) + 24 * scale
         pill = QRectF(rect.center().x() - width / 2, rect.bottom() - 48 * scale, width, 28 * scale)
@@ -243,22 +239,25 @@ class ClipDialog(QDialog):
         self.setWindowTitle(lineup.title)
         self.setStyleSheet("background: #000;")
         self.meta = clip_meta(lineup.id)
-        self.movie = open_clip(lineup.id, self)
-        self.movie.frameChanged.connect(self.update)
-        self.movie.start()
+        self.technique = lineup.technique_label
+        screen = QGuiApplication.primaryScreen()
+        width = int(screen.size().width() * screen.devicePixelRatio()) if screen else 1920
+        self.player = ClipPlayer(clip_path(lineup.id), min(width, 1920), self)
+        self.player.frame_changed.connect(self.update)
+        self.player.start()
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor("#000"))
-        frame = self.movie.currentPixmap()
-        if frame.isNull():
+        frame = self.player.image
+        if frame is None:
             return
         size = frame.size().scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
         target = QRectF((self.width() - size.width()) / 2, (self.height() - size.height()) / 2, size.width(), size.height())
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.drawPixmap(target, frame, QRectF(frame.rect()))
-        paint_clip_overlay(painter, target, clip_phase(self.movie, self.meta), max(1.0, target.width() / 900))
+        painter.drawImage(target, frame)
+        paint_clip_overlay(painter, target, clip_phase(self.player.number, self.meta), max(1.0, target.width() / 900), self.technique)
         painter.setPen(QColor(255, 255, 255, 140))
         painter.setFont(QFont("Segoe UI", 10))
         painter.drawText(self.rect().adjusted(0, 0, -18, -12), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
@@ -268,17 +267,17 @@ class ClipDialog(QDialog):
         self.close()
 
     def closeEvent(self, event):  # noqa: N802
-        self.movie.stop()
+        self.player.stop()
         super().closeEvent(event)
 
 
 class ClipView(QLabel):
-    """Reproduce el clip grabado (WebP animado, en loop) marcando dónde pararse y adónde apuntar.
+    """Reproduce el clip grabado, en loop, marcando dónde pararse, adónde apuntar y cómo tirar.
     Con un clic se ve en pantalla completa. Si no hay clip, muestra la foto del mapa."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.movie: QMovie | None = None
+        self.player: ClipPlayer | None = None
         self.meta: dict = {}
         self.lineup: Lineup | None = None
         self.setMinimumHeight(300)
@@ -287,21 +286,20 @@ class ClipView(QLabel):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def show_lineup(self, lineup: Lineup | None) -> bool:
-        if self.movie:
-            self.movie.stop()
-            self.movie.device().deleteLater()   # el clip anterior estaba entero en memoria
-            self.movie.deleteLater()
-            self.movie = None
+        if self.player:
+            self.player.stop()
+            self.player.deleteLater()
+            self.player = None
         self.lineup = lineup
         self.setCursor(Qt.CursorShape.ArrowCursor)
         if lineup and clip_path(lineup.id).exists():
             self.meta = clip_meta(lineup.id)
-            self.movie = open_clip(lineup.id, self)
-            self.movie.setScaledSize(QSize(self.width() - 8, int((self.width() - 8) * 9 / 16)))
-            self.setFixedHeight(int((self.width() - 8) * 9 / 16) + 8)
-            self.setMovie(self.movie)
-            self.movie.frameChanged.connect(self.update)
-            self.movie.start()
+            self.clear()
+            width = self.width() - 8
+            self.player = ClipPlayer(clip_path(lineup.id), int(width * self.devicePixelRatioF()), self)
+            self.setFixedHeight(int(width * 9 / 16) + 8)
+            self.player.frame_changed.connect(self.update)
+            self.player.start()
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             self.setToolTip(t("Clic para verlo en pantalla completa"))
             return True
@@ -322,16 +320,16 @@ class ClipView(QLabel):
             self.setText(t("Elegí una lata de la lista"))
         return False
 
-    def phase(self) -> str:
-        return clip_phase(self.movie, self.meta)
-
     def paintEvent(self, event):  # noqa: N802
         super().paintEvent(event)
-        if not self.movie:
+        if not self.player:
             return
         painter = QPainter(self)
         inner = QRectF(self.rect()).adjusted(4, 4, -4, -4)
-        paint_clip_overlay(painter, inner, self.phase())
+        if self.player.image is not None:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.drawImage(inner, self.player.image)
+        paint_clip_overlay(painter, inner, clip_phase(self.player.number, self.meta), 1.0, self.lineup.technique_label)
         text = t("Pantalla completa")
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         width = painter.fontMetrics().horizontalAdvance(text) + 18
@@ -343,10 +341,13 @@ class ClipView(QLabel):
         painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
     def mousePressEvent(self, _event):  # noqa: N802
-        if self.movie and self.lineup:
+        if self.player and self.lineup:
+            self.player.timer.stop()
             dialog = ClipDialog(self.lineup, self.window())
             dialog.showFullScreen()
             dialog.exec()
+            self.player.clock.restart()
+            self.player.timer.start()
 
 
 class NadesPage(QWidget):
@@ -363,6 +364,7 @@ class NadesPage(QWidget):
         self.kind = ""
         self.side = ""
         self.selected: str = ""
+        self.rows: dict[str, LineupRow] = {}
         outer = QVBoxLayout(self)
         outer.setContentsMargins(28, 6, 28, 20)
         outer.setSpacing(12)
@@ -509,17 +511,25 @@ class NadesPage(QWidget):
             self.list_layout.addWidget(label(t("No hay latas con este filtro."), "muted"))
         if items and not any(l.id == self.selected for l in items):
             self.selected = items[0].id
+        self.rows = {}
         for lineup in items[:150]:
             row = LineupRow(lineup, lineup.id == self.selected)
             row.clicked.connect(self._select)
             self.list_layout.addWidget(row)
+            self.rows[lineup.id] = row
         self.list_layout.addStretch(1)
         self.record_button.setEnabled(bool(items))
         self._show_detail(next((l for l in items if l.id == self.selected), None))
 
     def _select(self, lineup_id: str) -> None:
+        """Solo cambia el resaltado y el detalle: rearmar toda la lista en cada clic se notaba."""
+        if lineup_id == self.selected:
+            return
+        if self.selected in self.rows:
+            self.rows[self.selected].set_selected(False)
         self.selected = lineup_id
-        self._draw()
+        self.rows[lineup_id].set_selected(True)
+        self._show_detail(next((l for l in self.visible_lineups() if l.id == lineup_id), None))
 
     def _show_detail(self, lineup: Lineup | None) -> None:
         grid = self.data[1].get(self.map_name) if self.data else None
@@ -552,4 +562,5 @@ class NadesPage(QWidget):
     def _record(self) -> None:
         items = self.visible_lineups()
         if items:
+            self.clip.show_lineup(None)   # suelta el archivo: un clip abierto no se puede reemplazar
             self.record_requested.emit(self.map_name, [l for l in items if not clip_path(l.id).exists()][:40])
