@@ -150,6 +150,16 @@ class FaceitLevel(QWidget):
         self.setFixedSize(size, size)
         self.setToolTip(t("Nivel {0} de FACEIT").format(self.level) if self.level else t("Sin nivel de FACEIT"))
 
+    @classmethod
+    def of(cls, entry: dict, size: int = 44) -> "FaceitLevel":
+        """El nivel de un jugador a partir de su {"level", "elo"}, con el ELO al pasar el mouse."""
+        from ..faceit import level_progress
+        progress = level_progress(entry.get("elo"))
+        badge = cls(entry.get("level"), progress[0] if progress else 1.0, size)
+        if badge.level and entry.get("elo"):
+            badge.setToolTip(t("{0} ELO · nivel {1}").format(fmt_num(entry["elo"], 0), badge.level))
+        return badge
+
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QL
 
 from ..assets import map_image
 from ..i18n import t
+from ..faceit import LEVEL_COLORS
 from ..metrics import SOURCE_NAMES, aim_summary, map_label
 from .charts import RoundStrip
 from .match_parts import cell, color_legend, divider, glow, header_row, missing_note, player_row, team_rows, tone_color
@@ -19,7 +20,7 @@ from .replay import ReplayTab
 from .pages import card, result_text, scroll_page, short_date
 from .theme import (ACCENT, BAD, BG, CT_COLOR, GOOD, MID, MUTED, T_COLOR, fmt_num, fmt_pct, icon, label, panel,
                     rating_color)
-from .visual import Avatar, MapThumb, MapTitle, PremierBadge
+from .visual import Avatar, FaceitLevel, MapThumb, MapTitle, PremierBadge
 
 BOARD = [("Premier", 86), ("K", 32), ("D", 32), ("A", 32), ("+/-", 40), ("ADR", 42), ("KAST", 50), ("HS %", 48),
          ("1er duelo", 60), ("Rating", 54)]
@@ -51,6 +52,16 @@ AIM = [
      _pct, 0.85, 0.65),
     ("accuracy", t("Precisión\ntotal"), t("Todas las balas que pegaron sobre todas las que disparaste."), _pct, 0.24, 0.16),
 ]
+# Cómo arrancan tus duelos: la mira antes de que aparezca el rival, quién tira primero y cómo te agarran.
+DUELS = [
+    ("preaim", t("Preaim"), t("Veces que el rival apareció con tu mira a menos de 5° de su cabeza. Más es mejor."), _pct, 0.78, 0.65),
+    ("head_level", t("Altura\nde la mira"), t("Cuántos grados por arriba o por abajo de la cabeza estaba tu mira cuando apareció el rival. "
+                                              "Menos es mejor."), _deg, 1.5, 3.0),
+    ("time_to_fire", t("Tiempo al\ndisparo"), t("Cuánto tardaste en disparar desde que apareció el rival. Menos es mejor."), _ms, 200, 300),
+    ("shot_first", t("Disparaste\nprimero"), t("Duelos en los que tu primer disparo salió antes que el del rival."), _pct, 0.60, 0.45),
+    ("death_no_shot", t("Muertes\nsin disparar"), t("Muertes sin haber disparado en los 2 segundos anteriores. Menos es mejor."), _pct, 0.20, 0.40),
+    ("death_unseen", t("Muertes\nsin verlo"), t("Muertes por un rival que no tenías a la vista en el segundo anterior. Menos es mejor."), _pct, 0.25, 0.40),
+]
 AIM_WIDTH = 84
 TABS = [("you", t("Tu partida")), ("replay", t("Repetición 2D")), ("overview", t("Resumen")), ("board", t("Tabla")), ("aim", t("Puntería")),
         ("utility", t("Utilidad")), ("duels", t("Cara a cara")), ("impact", t("Impacto"))]
@@ -80,9 +91,11 @@ class MatchView(QWidget):
     replay_requested = Signal(int)
 
     def __init__(self, m: dict, parent=None, history: list[dict] | None = None, back_text: str = "",
-                 replay_loader=None, grid=None):
+                 replay_loader=None, grid=None, faceit_levels: dict | None = None):
         super().__init__(parent)
         self.match_id = m["id"]
+        self.is_faceit = m["source"] == "faceit"
+        self.faceit_levels = faceit_levels or {}
         self.setObjectName("matchView")
         self.map_name = m["map"]
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # para que Esc vuelva atrás
@@ -276,6 +289,11 @@ class MatchView(QWidget):
         painter.end()
         return canvas
 
+    def _faceit_entry(self, player: dict) -> dict | None:
+        """Nivel de FACEIT de un jugador de la partida. None si la partida no es de FACEIT o no se conoce."""
+        entry = self.faceit_levels.get(str(player.get("steamid"))) if self.is_faceit else None
+        return entry if entry and entry.get("level") else None
+
     def _header(self, m: dict, s: dict) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(20)
@@ -289,6 +307,9 @@ class MatchView(QWidget):
             info.addWidget(PremierBadge(m["rank_new"], 26))
             info.addWidget(label(short_date(m["played_at"]), "muted"))
         else:
+            mine = self._faceit_entry(next((p for p in m["scoreboard"] if p.get("me")), {}))
+            if mine:
+                info.addWidget(FaceitLevel.of(mine, 28))
             info.addWidget(label(f"{SOURCE_NAMES.get(m['source'], m['source'])} · {short_date(m['played_at'])}", "muted"))
         info.addStretch(1)
         left.addLayout(info)
@@ -367,6 +388,19 @@ class MatchView(QWidget):
             value.addWidget(delta)
             col.addLayout(value)
             row.addLayout(col)
+        elif self._faceit_entry(me):
+            row.addWidget(divider())
+            col = titled(t("FACEIT"), LEVEL_COLORS.get(self._faceit_entry(me)["level"], CT_COLOR))
+            value = QHBoxLayout()
+            value.setSpacing(8)
+            value.addWidget(FaceitLevel.of(self._faceit_entry(me), 44))
+            if m.get("elo_change") is not None:
+                delta = QLabel(f"{m['elo_change']:+d}")
+                delta.setStyleSheet(f"color: {GOOD if m['elo_change'] >= 0 else BAD}; font-family: 'Segoe UI Variable Display';"
+                                    "font-size: 18px; font-weight: 800;")
+                value.addWidget(delta)
+            col.addLayout(value)
+            row.addLayout(col)
         return box
 
     def _board_tab(self, m: dict, s: dict, players: list[dict]) -> QWidget:
@@ -417,7 +451,10 @@ class MatchView(QWidget):
     def _board(self, players: list[dict]) -> QFrame:
         box, layout = card(t("Tabla de la partida"), t("Rating, ADR y KAST calculados de la demo para los 10 jugadores"))
         layout.setSpacing(4)
-        layout.addWidget(header_row([(t(title), width, "") for title, width in BOARD]))
+        titles = [(t(title), width, "") for title, width in BOARD]
+        if self.is_faceit:
+            titles[0] = (t("FACEIT"), BOARD[0][1], t("Nivel actual de FACEIT de cada jugador"))
+        layout.addWidget(header_row(titles))
 
         def build(p: dict) -> QFrame:
             st = p.get("stats") or {}
@@ -427,7 +464,9 @@ class MatchView(QWidget):
             premier_row = QHBoxLayout(premier)
             premier_row.setContentsMargins(0, 0, 0, 0)
             premier_row.addStretch(1)
-            premier_row.addWidget(PremierBadge(p["premier"], 22) if p.get("premier") else label("—", "smallMuted"))
+            level = self._faceit_entry(p)
+            premier_row.addWidget(FaceitLevel.of(level, 28) if level
+                                  else PremierBadge(p["premier"], 22) if p.get("premier") else label("—", "smallMuted"))
             premier_row.addStretch(1)
             cells = [premier,
                      cell(str(p["kills"]), BOARD[1][1]), cell(str(p["deaths"]), BOARD[2][1]), cell(str(p["assists"]), BOARD[3][1]),
@@ -462,4 +501,15 @@ class MatchView(QWidget):
             return player_row(p, cells)
         team_rows(layout, players, build)
         color_legend(layout)
+        if any((aim_summary(raw) or {}).get("preaim") is not None for raw in aim.values()):
+            duels, duels_layout = card(t("Mira y duelos"), t("Cómo arrancan tus duelos y cómo te agarran · pasá el mouse por cada columna"))
+            duels_layout.setSpacing(4)
+            outer.addWidget(duels)
+            duels_layout.addWidget(header_row([(title, AIM_WIDTH, tip) for _k, title, tip, *_rest in DUELS]))
+
+            def build_duels(p: dict) -> QFrame:
+                values = aim_summary(aim.get(str(p["steamid"]))) or {}
+                return player_row(p, [cell(fmt(values.get(key)), AIM_WIDTH, tone_color(values.get(key), good, bad), p.get("me", False))
+                                      for key, _title, _tip, fmt, good, bad in DUELS])
+            team_rows(duels_layout, players, build_duels)
         return widget

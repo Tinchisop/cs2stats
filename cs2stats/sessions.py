@@ -176,6 +176,25 @@ def analyze_sessions(rows: list[dict], now: datetime | None = None) -> Report:
                   [after_win, after_loss, after_two], bands, findings, stop_after, current)
 
 
+def tilt_warning(report: Report, rows: list[dict]) -> str:
+    """Aviso si en la sesión de ahora venís de 3 derrotas seguidas o más, con cuánto bajó tu rating si se puede medir."""
+    streak: list[dict] = []
+    for row in reversed(report.current):
+        if row["result"] != "L":
+            break
+        streak.append(row)
+    if len(streak) < 3:
+        return ""
+    now = [r["rating"] for r in streak if r.get("rating") is not None]
+    usual = [r["rating"] for r in rows if r.get("rating") is not None and not any(r is s for s in streak)][-20:]
+    if len(now) >= 2 and len(usual) >= 5:
+        before = sum(usual) / len(usual)
+        drop = 1 - (sum(now) / len(now)) / before if before else 0
+        if drop >= 0.1:
+            return t("Perdiste {0} seguidas y tu rating bajó un {1}. Cortá un rato antes de seguir.").format(len(streak), _pct(drop))
+    return t("Perdiste {0} seguidas. Cortá un rato antes de seguir.").format(len(streak))
+
+
 def current_advice(report: Report) -> str:
     """Qué conviene hacer ahora, según la sesión que estás jugando. Vacío si no hay nada que decir."""
     games = report.current

@@ -5,7 +5,8 @@ con el filtro de modo. Para puntería, utilidad e impacto hace falta la demo (se
 
 from __future__ import annotations
 
-from datetime import datetime
+import math
+from datetime import datetime, timedelta
 from typing import Callable
 
 from .i18n import t
@@ -15,6 +16,10 @@ from .store import Settings, Store
 
 STATS_PER_SYNC = 60      # partidas nuevas que se completan en cada búsqueda (una consulta cada una)
 HISTORY_PAGES = 10       # hasta 1000 partidas hacia atrás
+LEVELS_PER_SYNC = 60     # jugadores de tus demos de FACEIT a los que se les busca el nivel en cada búsqueda
+ELO_PER_WIN = 25         # lo que suele dar una victoria, hasta tener tus propios números
+MAX_FORECAST = 200       # más partidas que esto no es un pronóstico: se dice que no venís subiendo
+LEVEL_MAX_DAYS = 7       # después de estos días se vuelve a preguntar el nivel de cada jugador
 # Nivel de FACEIT en CS2 según el ELO: (nivel, desde).
 LEVELS = [(1, 100), (2, 501), (3, 751), (4, 901), (5, 1051), (6, 1201), (7, 1351), (8, 1531), (9, 1751), (10, 2001)]
 LEVEL_COLORS = {1: "#eeeeee", 2: "#1ce400", 3: "#1ce400", 4: "#ffc800", 5: "#ffc800", 6: "#ffc800", 7: "#ffc800",
@@ -29,6 +34,75 @@ def level_progress(elo: int | None) -> tuple[float, int, int] | None:
         if elo < end:
             return max(0.0, (elo - start) / (end - start)), end - elo, following
     return None
+
+
+def level_at(when: str, log: list[dict], current: dict) -> dict:
+    """Tu nivel y ELO cuando jugaste, según lo guardado en cada búsqueda. Antes del primer dato, el más viejo que hay."""
+    known = [row for row in log if row["at"] <= (when or "")]
+    return known[-1] if known else log[0] if log else current
+
+
+def _finished_at(row: dict) -> str:
+    """Cuándo terminó una partida del historial de FACEIT. Vacío si no se sabe."""
+    try:
+        return (datetime.fromisoformat(row["played_at"])
+                + timedelta(minutes=int(str(row.get("duration") or "").split()[0]))).isoformat(timespec="seconds")
+    except (KeyError, TypeError, ValueError, IndexError):
+        return ""
+
+
+def elo_changes(history: list[dict], log: list[dict]) -> dict[str, int]:
+    """ELO ganado o perdido por partida. FACEIT no lo da: sale de tu ELO guardado en cada búsqueda, y solo cuando entre
+    dos datos hubo una sola partida (con dos o más no se puede saber cuánto fue cada una)."""
+    ends = [(_finished_at(h), h["key"]) for h in history if h.get("mode") == "faceit"]
+    changes = {}
+    for before, after in zip(log, log[1:]):
+        inside = [key for end, key in ends if end and before["at"] < end <= after["at"]]
+        if len(inside) == 1:
+            changes[inside[0]] = after["elo"] - before["elo"]
+    return changes
+
+
+def link_demo_changes(matches: list[dict], history: list[dict], changes: dict[str, int]) -> None:
+    """Le pasa a cada partida con demo el ELO de su partida del historial (mismo mapa y resultado, hasta 48 horas)."""
+    for match in matches:
+        match["elo_change"] = None
+        if match.get("source") != "faceit":
+            continue
+        try:
+            when = datetime.fromisoformat(match["played_at"])
+        except (TypeError, ValueError):
+            continue
+        near = []
+        for row in history:
+            if (row.get("key") in changes and row["map"].lower() == map_label(match["map"]).lower()
+                    and (row["score_us"], row["score_them"]) == (match["score_us"], match["score_them"])):
+                gap = abs((datetime.fromisoformat(row["played_at"]) - when).total_seconds())
+                if gap <= 48 * 3600:
+                    near.append((gap, row["key"]))
+        if near:
+            match["elo_change"] = changes[min(near)[1]]
+
+
+def games_to_level(elo: int | None, history: list[dict], changes: dict[str, int]) -> tuple[int, int | None, bool] | None:
+    """(victorias seguidas que alcanzan, partidas que faltan a tu ritmo, si hay datos de tu ritmo). None en nivel 10."""
+    progress = level_progress(elo)
+    if not progress:
+        return None
+    missing = progress[1]
+    games = sorted((h for h in history if h.get("mode") == "faceit"), key=lambda h: h["played_at"] or "")
+    recent = [changes[h["key"]] for h in games if h["key"] in changes][-15:]
+    gains = [c for c in recent if c > 0]
+    wins = math.ceil(missing / (sum(gains) / len(gains) if gains else ELO_PER_WIN))
+    if len(recent) >= 5:
+        per_game = sum(recent) / len(recent)
+    elif len(games) >= 5:
+        results = [h["result"] for h in games[-20:]]
+        per_game = ELO_PER_WIN * (2 * results.count("W") / len(results) - 1)
+    else:
+        return wins, None, False
+    needed = math.ceil(missing / per_game) if per_game > 0 else None
+    return wins, needed if needed and needed <= MAX_FORECAST else None, True
 
 
 def _headers(key: str) -> dict:
@@ -98,6 +172,33 @@ def match_row(key: str, item: dict, player_id: str) -> dict | None:
     }
 
 
+def update_levels(key: str, settings: Settings, matches: list[dict]) -> None:
+    """Guarda el nivel actual de los jugadores de tus demos de FACEIT (la demo no lo trae). Sin cuenta queda sin nivel."""
+    levels = dict(settings["faceit_levels"])
+    now = datetime.now()
+    pending = []
+    for match in reversed(matches):
+        if match.get("source") != "faceit":
+            continue
+        for player in match.get("scoreboard") or []:
+            steamid = str(player["steamid"])
+            saved = levels.get(steamid)
+            old = not saved or (now - datetime.fromisoformat(saved["at"])).days >= LEVEL_MAX_DAYS
+            if old and not player.get("me") and steamid not in pending:
+                pending.append(steamid)
+    missing_account = t("No hay una cuenta de FACEIT con CS2 asociada a tu cuenta de Steam.")
+    for steamid in pending[:LEVELS_PER_SYNC]:
+        try:
+            found = profile(key, int(steamid))
+        except LobbyError as error:
+            if str(error) != missing_account:
+                break  # sin conexión o demasiadas consultas: sigue en la próxima búsqueda
+            found = {}
+        levels[steamid] = {"level": found.get("level"), "elo": found.get("elo"), "at": now.isoformat(timespec="seconds")}
+    if pending:
+        settings.set("faceit_levels", levels)
+
+
 def sync_faceit(store: Store, settings: Settings, log: Callable[[str], None]) -> int:
     """Trae tu perfil y las partidas de FACEIT que todavía no están. Devuelve cuántas partidas nuevas se guardaron."""
     key = settings.secret("faceit_key")
@@ -132,6 +233,7 @@ def sync_faceit(store: Store, settings: Settings, log: Callable[[str], None]) ->
             rows.append(row)
     if rows:
         store.save_history(steamid, rows)
+    update_levels(key, settings, store.matches(steamid))
     settings.set("faceit_synced_at", datetime.now().isoformat(timespec="seconds"))
     log(t("FACEIT: {0} partidas nuevas").format(len(rows)))
     return len(rows)

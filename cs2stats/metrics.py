@@ -213,6 +213,13 @@ def aim_summary(raw: dict | None) -> dict | None:
         "counter_strafe": ratio(raw["strafe_ok"], raw["strafe_shots"]),
         "accuracy": ratio(raw["hits"], raw["shots"]),
         "shots": raw["shots"],
+        # Las partidas importadas antes de medir esto no traen estas cuentas.
+        "preaim": ratio(raw.get("preaim_ok", 0), raw.get("preaim_n", 0)),
+        "head_level": ratio(raw.get("xhair_v_sum", 0), raw.get("preaim_n", 0)),
+        "time_to_fire": ratio(raw.get("fire_sum", 0), raw.get("fire_n", 0)),
+        "shot_first": ratio(raw.get("duels_first", 0), raw.get("duels", 0)),
+        "death_no_shot": ratio(raw.get("death_no_shot", 0), raw.get("death_n", 0)),
+        "death_unseen": ratio(raw.get("death_unseen", 0), raw.get("death_n", 0)),
     }
 
 

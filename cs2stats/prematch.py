@@ -165,6 +165,13 @@ def faceit_room(api_key: str, room: str, me: int) -> tuple[list[Person], list[Pe
     return teams[0], teams[1]
 
 
+def faceit_room_pool(api_key: str, room: str) -> list[str]:
+    """Los mapas que se vetan en esa sala. Vacío si FACEIT no los informa."""
+    data = _get(f"{FACEIT_API}/matches/{room}", {"Authorization": f"Bearer {api_key}"})
+    entities = ((data.get("voting") or {}).get("map") or {}).get("entities") or []
+    return [name for name in (e.get("game_map") or e.get("class_name") or e.get("name") for e in entities) if name]
+
+
 def faceit_numbers(api_key: str, person: Person) -> dict:
     """Nivel, K/D, victorias y victorias por mapa de un jugador en FACEIT."""
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -214,12 +221,14 @@ def collect(api_key: str, faceit_key: str, me: int, mates_text: str, rivals_text
         found = ROOM.search(room) or ROOM.search(f"room/{room.strip()}")
         room = found.group(1) if found else ""
     room = room or room_a or room_b
+    pool: list[str] = []
     if room:
         if not faceit_key:
             notes.append(t("Para leer la sala de FACEIT falta tu clave de la API de FACEIT."))
         else:
             say(t("Leyendo la sala de FACEIT"))
             team, enemies = faceit_room(faceit_key, room, me)
+            pool = faceit_room_pool(faceit_key, room)
             ids = {p.steamid for p in mates + rivals if p.steamid}
             mates += [p for p in team if p.steamid != me and p.steamid not in ids]
             rivals += [p for p in enemies if p.steamid not in ids]
@@ -250,7 +259,8 @@ def collect(api_key: str, faceit_key: str, me: int, mates_text: str, rivals_text
                 person.faceit = faceit_numbers(faceit_key, person)
             except LobbyError as error:
                 notes.append(f"{person.name}: {error}")
-    return {"mates": [asdict(p) for p in mates], "rivals": [asdict(p) for p in rivals], "notes": notes}
+    return {"mates": [asdict(p) for p in mates], "rivals": [asdict(p) for p in rivals], "notes": notes,
+            "room": room, "pool": pool}
 
 
 def known_name(matches: list[dict], steamid: int) -> str:
@@ -283,12 +293,16 @@ def appearances(matches: list[dict], steamid: int) -> list[dict]:
     return result
 
 
-def analyze(me: int, mates: list[dict], rivals: list[dict], matches: list[dict], games: list[dict]) -> dict:
+def analyze(me: int, mates: list[dict], rivals: list[dict], matches: list[dict], games: list[dict],
+            room_pool: list[str] | None = None) -> dict:
     """Mapas (con tu equipo contra los rivales) y rivales a tener en cuenta.
 
-    games: tu historial completo (de Steam o tus demos) para tus propias victorias por mapa."""
+    games: tu historial completo (de Steam o tus demos) para tus propias victorias por mapa.
+    room_pool: los mapas de la sala de FACEIT, si se conocen; si no, los que venís jugando."""
     recent = sorted({_key(g["map"]) for g in games[-60:] if g.get("map") and (g.get("mode") or g.get("source")) != "wingman"})
     pool = recent if len(recent) >= 5 else [_key(m) for m in DEFAULT_POOL]
+    if room_pool:
+        pool = sorted({_key(m) for m in room_pool})
 
     def tally(people: list[dict], include_me: bool) -> dict[str, list[float]]:
         totals = {m: [0.0, 0.0] for m in pool}
@@ -350,4 +364,7 @@ def analyze(me: int, mates: list[dict], rivals: list[dict], matches: list[dict],
             c["tags"].append("danger")
         c["threat"] = (c["rating"] or (c["kd"] or 1.0)) + 0.3 * len(c["tags"]) + 0.03 * (c["level"] or 0)
     cards.sort(key=lambda c: -c["threat"])
-    return {"maps": rows, "rivals": cards, "mates": mates}
+    # Veto de FACEIT: se banea de a uno, del peor mapa para tu equipo al mejor, y queda el último.
+    veto = [row["map"] for row in reversed(rows)]
+    clear = bool(rows) and rows[0]["edge"] - rows[-1]["edge"] >= 0.02   # con todos parejos, el orden sería inventado
+    return {"maps": rows, "rivals": cards, "mates": mates, "bans": veto[:-1] if clear else [], "keep": veto[-1] if clear else ""}

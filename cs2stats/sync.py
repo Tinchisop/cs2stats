@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import shutil
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 from . import steamapi
-from .finder import remove_quietly
+from .finder import cs2_running, remove_quietly
 from .helper import fetch_games, send_steam_message
 from .i18n import t
 from .metrics import map_label
@@ -17,6 +19,13 @@ from .resumen import gsi_message, match_message
 from .store import Settings, Store, data_dir
 
 MAX_TRIES = 4
+FRESH_CODE = 30 * 60      # mientras una partida es reciente, que Valve todavía no tenga sus datos no es un error
+GC_GAP = 45               # segundos entre conexiones de la cuenta secundaria al Game Coordinator en las búsquedas rápidas
+PLAYING_WINDOW = 20 * 60  # después de cerrar CS2, se sigue buscando seguido este tiempo
+
+URGENT = threading.Event()  # terminó una partida: las descargas de partidas viejas le dejan el lugar
+_last_gc = 0.0
+_cs2_seen = 0.0
 
 
 def steam_ready(settings: Settings) -> dict:
@@ -28,8 +37,28 @@ def steam_ready(settings: Settings) -> dict:
     }
 
 
-def sync_steam(store: Store, settings: Settings, log: Callable[[str], None]) -> int:
-    """Hace todo lo posible y devuelve cuántas partidas nuevas se importaron. Lanza SteamError/HelperError."""
+def _is_fresh_code(code: dict) -> bool:
+    try:
+        return (datetime.now() - datetime.fromisoformat(code["added_at"])).total_seconds() < FRESH_CODE
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def sync_if_playing(store: Store, settings: Settings, log: Callable[[str], None]) -> int:
+    """Búsqueda rápida si CS2 está abierto o se cerró hace poco. Funciona aunque no llegue el aviso de fin de partida."""
+    global _cs2_seen
+    if cs2_running():
+        _cs2_seen = time.monotonic()
+    if not _cs2_seen or time.monotonic() - _cs2_seen > PLAYING_WINDOW:
+        return 0
+    return sync_steam(store, settings, log, quick=True)
+
+
+def sync_steam(store: Store, settings: Settings, log: Callable[[str], None], quick: bool = False) -> int:
+    """Hace todo lo posible y devuelve cuántas partidas nuevas se importaron. Lanza SteamError/HelperError.
+
+    Con quick solo busca las partidas nuevas: sin completar las viejas, que pueden ocupar la red durante minutos."""
+    global _last_gc
     steamid = settings["steamid"]
     imported = 0
     ready = steam_ready(settings)
@@ -39,33 +68,47 @@ def sync_steam(store: Store, settings: Settings, log: Callable[[str], None]) -> 
         last = settings["last_sharecode"]
         store.add_sharecodes([last])
         log(t("Preguntando a Steam si hay partidas nuevas"))
-        codes = steamapi.next_sharecodes(settings.secret("api_key"), steamid, settings.secret("auth_code"), last)
+        try:
+            codes = steamapi.next_sharecodes(settings.secret("api_key"), steamid, settings.secret("auth_code"), last)
+        except steamapi.SteamError as error:
+            if not quick:
+                raise
+            log(str(error))
+            codes = []
         if codes:
             store.add_sharecodes(codes)
             settings.set("last_sharecode", codes[-1])
             log(t('Steam encontró {0} {1}').format(len(codes), t('partida nueva') if len(codes) == 1 else t('partidas nuevas')))
 
     # 2. URL de la demo de cada código, con la cuenta secundaria en el Game Coordinator.
-    waiting = [c for c in store.sharecodes(("nueva", "reintentar")) if (c["tries"] or 0) < MAX_TRIES]
-    if waiting and ready["gc"]:
+    waiting = [c for c in store.sharecodes(("nueva", "reintentar")) if (c["tries"] or 0) < MAX_TRIES or _is_fresh_code(c)]
+    if waiting and ready["gc"] and (not quick or time.monotonic() - _last_gc >= GC_GAP):
+        _last_gc = time.monotonic()
         log(t("Conectando la cuenta secundaria al Game Coordinator de CS2"))
         results, renewed = fetch_games(settings.secret("gc_token"), [c["code"] for c in waiting], log)
         if renewed:
             settings.set("gc_token", renewed)
         tries = {c["code"]: (c["tries"] or 0) + 1 for c in waiting}
+        fresh = {c["code"] for c in waiting if _is_fresh_code(c)}
         for item in results:
             code = item["sharecode"]
             if item.get("ok") and item.get("demoUrl"):
                 store.update_sharecode(code, status="con_url", demo_url=item["demoUrl"],
                                        match_time=int(item.get("matchTime") or 0), message="", tries=tries[code])
             else:
-                final = tries[code] >= MAX_TRIES
+                final = tries[code] >= MAX_TRIES and code not in fresh
                 store.update_sharecode(code, status="sin_datos" if final else "reintentar",
                                        message=item.get("message", ""), tries=tries[code])
 
     # 3. Descarga e importación.
     for item in store.sharecodes(("con_url",)):
         imported += _download_and_import(store, settings, item["code"], item["demo_url"], item.get("match_time") or 0, log)
+
+    if quick:
+        settings.set("steam_error", "")
+        if ready["gc"]:
+            deliver_pending_message(store, settings, log)
+        return imported
 
     # 4. Demos que el historial de Steam todavía ofrece para bajar (sin pasar por el Game Coordinator).
     known_urls = {c["demo_url"] for c in store.sharecodes() if c["demo_url"]}
@@ -88,35 +131,45 @@ def sync_steam(store: Store, settings: Settings, log: Callable[[str], None]) -> 
             store.add_sharecodes([code])
             store.update_sharecode(code, status="con_url", demo_url=url)
             imported += _download_and_import(store, settings, code, url, 0, log, played_at=row["played_at"])
-    complete_details(store, settings, log)
     settings.set("steam_synced_at", datetime.now().isoformat(timespec="seconds"))
     settings.set("steam_error", "")
     if ready["gc"]:
         deliver_pending_message(store, settings, log)
+    if not cs2_running():  # con CS2 abierto, bajar demos viejas le saca red al juego
+        complete_details(store, settings, log)
     return imported
 
 
-MESSAGE_WAIT = 30 * 60    # si en 30 minutos no llegó la demo, el mensaje sale con lo que mandó CS2
+MESSAGE_WAIT = 3 * 60      # si en 3 minutos no se analizó la demo, sale un mensaje corto con lo que mandó CS2
+MESSAGE_WINDOW = 3 * 3600  # partidas que todavía merecen mensaje al importarse, aunque no haya llegado el aviso de CS2
 
 
 def deliver_pending_message(store: Store, settings: Settings, log: Callable[[str], None]) -> None:
-    """Si terminó una partida y ya se analizó su demo (o pasó demasiado tiempo), te manda el resumen por Steam."""
+    """Te manda por Steam el resumen de cada partida recién analizada, una sola vez. Si terminó una partida y la demo
+    se demora, sale antes uno corto con lo que mandó CS2, y el completo cuando se analice."""
+    if not settings["steam_message"]:
+        return
     pending = settings["message_pending"]
-    if not pending or not settings["steam_message"]:
-        return
-    ended = datetime.fromisoformat(pending["ended_at"])
+    ended = datetime.fromisoformat(pending["ended_at"]) if pending else None
     matches = store.matches(settings["steamid"])
-    match = next((m for m in reversed(matches) if m["map"] == pending["map"]
-                  and (m["score_us"], m["score_them"]) == (pending["score_us"], pending["score_them"])
-                  and abs((datetime.fromisoformat(m["played_at"]) - ended).total_seconds()) <= 3 * 3600), None)
-    if match:
-        text = match_message(match, [m for m in matches if m["played_at"] < match["played_at"]])
-    elif (datetime.now() - ended).total_seconds() >= MESSAGE_WAIT:
-        text = gsi_message(pending)
-    else:
-        return
-    send_summary(settings, text, log)
-    settings.set("message_pending", {})
+    sent = list(settings["message_sent"])
+    found = False
+    for match in matches:
+        played = datetime.fromisoformat(match["played_at"])
+        is_pending = bool(pending) and match["map"] == pending["map"] and abs((played - ended).total_seconds()) <= 3 * 3600 \
+            and (match["score_us"], match["score_them"]) == (pending["score_us"], pending["score_them"])
+        found = found or is_pending
+        if match["match_key"] in sent or match.get("source") == "faceit":
+            continue
+        if not is_pending and (datetime.now() - played).total_seconds() > MESSAGE_WINDOW:
+            continue
+        send_summary(settings, match_message(match, [m for m in matches if m["played_at"] < match["played_at"]]), log)
+        sent.append(match["match_key"])
+        settings.set("message_sent", sent[-50:])
+    if pending and (found or (datetime.now() - ended).total_seconds() >= MESSAGE_WAIT):
+        if not found:
+            send_summary(settings, gsi_message(pending), log)
+        settings.set("message_pending", {})
 
 
 def send_summary(settings: Settings, text: str, log: Callable[[str], None]) -> str:
@@ -148,7 +201,9 @@ def _download_and_import(store: Store, settings: Settings, code: str, url: str, 
     try:
         demo = steamapi.download_demo(url, data_dir() / "descargas", progress)
     except steamapi.SteamError as error:
-        vencida = t("borró") in str(error)
+        # Una demo recién terminada puede tardar en aparecer: ese 404 no significa que Valve la borró.
+        recent = match_time and time.time() - match_time < MESSAGE_WINDOW
+        vencida = t("borró") in str(error) and not recent
         store.update_sharecode(code, status="vencida" if vencida else "con_url", message=str(error))
         log(str(error))
         return 0
@@ -227,9 +282,10 @@ def complete_details(store: Store, settings: Settings, log: Callable[[str], None
         needs_detail = match["detail"] is None or bool(match["detail"] and match["rounds"] and "mvp" not in match["rounds"][0])
         needs_spots = bool(match["rounds"]) and "kill_spots" not in match["rounds"][0]
         needs_replay = position < REPLAY_BACKFILL and match["match_key"] not in replays
-        if not (needs_detail or needs_spots or needs_replay):
+        needs_duels = position < REPLAY_BACKFILL and bool(match["aim"]) and not any("preaim_n" in v for v in match["aim"].values())
+        if not (needs_detail or needs_spots or needs_replay or needs_duels):
             continue
-        if done >= limit:
+        if done >= limit or URGENT.is_set():
             break
         try:
             fresh = reread_demo(store, settings, match, log)
@@ -241,6 +297,8 @@ def complete_details(store: Store, settings: Settings, log: Callable[[str], None
             store.mark_no_spots(match["id"])   # sin demo: el detalle que ya tenía se conserva
         if needs_replay and not (fresh and fresh.get("replay")):
             store.save_replay(match["match_key"], None)
+        if needs_duels and not fresh:
+            store.mark_no_duels(match["id"])
         done += 1
     return done
 

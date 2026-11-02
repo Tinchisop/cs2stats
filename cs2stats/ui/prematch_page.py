@@ -191,7 +191,8 @@ class PrematchPage(Page):
         view = self.view
         me = next((int(p["steamid"]) for m in reversed(view["all_matches"]) for p in m["scoreboard"] if p.get("me")), 0)
         games = view["all_history"] or view["all_matches"]
-        result = analyze(me, self.collected["mates"], self.collected["rivals"], view["all_matches"], games)
+        result = analyze(me, self.collected["mates"], self.collected["rivals"], view["all_matches"], games,
+                         self.collected.get("pool"))
         box, layout = card(t("Mapas"), t("Victorias por mapa: vos y tus compañeros contra los rivales"))
         picks = [r for r in result["maps"] if r["verdict"] == "pick"]
         bans = [r for r in result["maps"] if r["verdict"] == "ban"]
@@ -211,6 +212,19 @@ class PrematchPage(Page):
         layout.addWidget(label(t("Con pocas partidas cada mapa se acerca al 50 %, para no exagerar con un par de resultados."),
                                "smallMuted", wrap=True))
         self.report.addWidget(box)
+        if self.collected.get("room"):
+            box, layout = card(t("Veto de FACEIT"), t("Baneá en este orden; si un mapa ya cayó, pasá al siguiente"))
+            if result["keep"]:
+                order = QHBoxLayout()
+                order.setSpacing(6)
+                for index, name in enumerate(result["bans"], 1):
+                    order.addWidget(chip(f"{index}. {pool_label(name)}", "chipBad"))
+                order.addWidget(chip(t("Debería quedar: {0}").format(pool_label(result["keep"])), "chipGood"))
+                order.addStretch(1)
+                layout.addLayout(order)
+            else:
+                layout.addWidget(label(t("Con estos datos los mapas están parejos: no hay un orden que recomendar."), "muted", wrap=True))
+            self.report.addWidget(box)
         if result["rivals"]:
             box, layout = card(t("Rivales a tener en cuenta"), t("De tus demos y de FACEIT"))
             grid = QGridLayout()

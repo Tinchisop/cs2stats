@@ -438,6 +438,10 @@ STOPPED_SPEED = 100     # unidades por segundo: por debajo, el arma ya dispara p
 SIGHT_GAP = TICKRATE    # para contar como "apareció", el rival tuvo que estar sin verse al menos 1 s
 SIGHT_LEAD = 6          # el aviso de "visto" llega unos ticks tarde: la mira se mide un poco antes
 DAMAGE_WINDOW = 3 * TICKRATE
+PREAIM_ANGLE = 5.0      # grados: con la mira así de cerca de la cabeza, el rival aparece prácticamente en tu mira
+DUEL_WINDOW = 2 * TICKRATE    # disparos que cuentan como parte del duelo después de que aparece el rival
+DEATH_WINDOW = 2 * TICKRATE   # sin disparar en este tiempo antes de morir: te agarraron sin reaccionar
+UNSEEN_WINDOW = TICKRATE      # sin tener a la vista al asesino en este tiempo: te mató sin que lo vieras
 
 
 def _aim(parser, events, windows) -> dict:
@@ -509,6 +513,34 @@ def _aim(parser, events, windows) -> dict:
                 and team[index[attacker], tick] != team[index[victim], tick]:
             hits.setdefault(attacker, []).append((tick, index[victim], str(row.get("hitgroup") or "") == "head"))
 
+    shot_ticks = {index[player]: [tick for tick, _gun in rows_] for player, rows_ in shots.items()}
+
+    def first_shot(shooter: int, target: int, tick: int) -> int | None:
+        """El primer disparo con el rival a la vista dentro del duelo que arranca en tick."""
+        mine = shot_ticks.get(shooter, [])
+        for moment in mine[bisect.bisect_left(mine, tick):]:
+            if moment - tick > DUEL_WINDOW:
+                return None
+            if seen[shooter, target, moment]:
+                return moment
+        return None
+
+    fatal: dict[int, dict] = {}  # por jugador: cómo lo agarraron sus muertes
+    for row in events.get("player_death", []):
+        victim, killer, tick = sid(row.get("user_steamid")), sid(row.get("attacker_steamid")), at(row["tick"])
+        if victim not in index or killer not in index or tick is None or not tick or not is_gun(row.get("weapon")):
+            continue
+        v, k = index[victim], index[killer]
+        if team[v, tick - 1] == team[k, tick - 1]:
+            continue
+        mine = shot_ticks.get(v, [])
+        fired = bisect.bisect_right(mine, tick) > bisect.bisect_left(mine, tick - DEATH_WINDOW)
+        spotted = seen[v, k, max(0, tick - UNSEEN_WINDOW):tick].any()
+        item = fatal.setdefault(victim, {"death_n": 0, "death_no_shot": 0, "death_unseen": 0})
+        item["death_n"] += 1
+        item["death_no_shot"] += not fired
+        item["death_unseen"] += not spotted
+
     result = {}
     for player in players:
         a = index[player]
@@ -518,7 +550,9 @@ def _aim(parser, events, windows) -> dict:
         raw = {"shots": len(mine), "hits": 0, "seen_shots": 0, "seen_hits": 0, "first_shots": 0, "first_hits": 0,
                "spray_shots": 0, "spray_hits": 0, "strafe_shots": 0, "strafe_ok": 0, "gun_hits": len(landed),
                "head_hits": sum(1 for *_x, head in landed if head), "ttd_sum": 0.0, "ttd_n": 0,
-               "xhair_sum": 0.0, "xhair_n": 0}
+               "xhair_sum": 0.0, "xhair_n": 0, "xhair_v_sum": 0.0, "preaim_ok": 0, "preaim_n": 0, "fire_sum": 0.0, "fire_n": 0,
+               "duels": 0, "duels_first": 0, "death_n": 0, "death_no_shot": 0, "death_unseen": 0,
+               **fatal.get(player, {})}
         previous = (-SPRAY_GAP - 1, "")
         for tick, gun in mine:
             j = bisect.bisect_left(hit_ticks, tick)
@@ -549,6 +583,13 @@ def _aim(parser, events, windows) -> dict:
                 if j < len(damage) and damage[j] - tick <= DAMAGE_WINDOW:
                     raw["ttd_sum"] += (damage[j] - tick) / TICKRATE * 1000
                     raw["ttd_n"] += 1
+                mine_first, their_first = first_shot(a, b, tick), first_shot(b, a, tick)
+                if mine_first is not None:
+                    raw["fire_sum"] += (mine_first - tick) / TICKRATE * 1000
+                    raw["fire_n"] += 1
+                if mine_first is not None or their_first is not None:
+                    raw["duels"] += 1
+                    raw["duels_first"] += their_first is None or (mine_first is not None and mine_first <= their_first)
                 u = max(0, tick - SIGHT_LEAD)
                 dx, dy, dz = x[b, u] - x[a, u], y[b, u] - y[a, u], eye[b, u] - eye[a, u]
                 want_yaw = math.degrees(math.atan2(dy, dx))
@@ -557,8 +598,13 @@ def _aim(parser, events, windows) -> dict:
                 if math.isfinite(angle):
                     raw["xhair_sum"] += angle
                     raw["xhair_n"] += 1
+                    raw["xhair_v_sum"] += abs(pitch[a, u] - want_pitch)
+                    raw["preaim_ok"] += angle <= PREAIM_ANGLE
+                    raw["preaim_n"] += 1
         raw["ttd_sum"] = round(raw["ttd_sum"], 1)
         raw["xhair_sum"] = round(raw["xhair_sum"], 2)
+        raw["xhair_v_sum"] = round(float(raw["xhair_v_sum"]), 2)
+        raw["fire_sum"] = round(raw["fire_sum"], 1)
         result[str(player)] = {k: (int(v) if isinstance(v, (bool, np.bool_, np.integer)) else v) for k, v in raw.items()}
     return result
 

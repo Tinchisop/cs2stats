@@ -9,7 +9,7 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout
 
 from ..i18n import t
-from ..training import past_weeks, recommend, weekly_challenges
+from ..training import past_weeks, recommend, weekly_challenges, weekly_plan
 from .hud import TierProgress
 from .pages import Page, card, chip
 from .theme import CT_COLOR, GOOD, button, fmt_num, label, panel
@@ -24,9 +24,22 @@ class TrainingPage(Page):
         body.addWidget(label(t("Retos nuevos cada lunes armados con tus puntos flojos, y mapas del Workshop de CS2 para "
                                "practicar cada cosa. El avance cuenta tus partidas con demo de la semana."),
                              "pageLead", wrap=True))
+        body.addWidget(self._plan(view, now))
         body.addWidget(self._week(matches, now))
         body.addWidget(self._workouts(view))
         body.addStretch(1)
+
+    def _plan(self, view: dict, now: datetime):
+        box, layout = card(t("Tu plan de la semana"), t("Se arma solo cada lunes con tus puntos más flojos"))
+        for day, workouts in weekly_plan(view["all_matches"], view.get("samples") or [], view.get("premier"), now):
+            row = QHBoxLayout()
+            row.addWidget(label(day, "insightTitle"))
+            row.addWidget(label(" + ".join(w.focus for w in workouts), "body", wrap=True), 1)
+            row.addWidget(chip(t("{0} min").format(sum(w.minutes for w in workouts))))
+            layout.addLayout(row)
+        challenges, _start = weekly_challenges(view["all_matches"], now)
+        layout.addWidget(label(t("En tus partidas: {0}").format(" · ".join(c.title for c in challenges[:2])), "smallMuted", wrap=True))
+        return box
 
     def _week(self, matches: list[dict], now: datetime):
         challenges, start = weekly_challenges(matches, now)

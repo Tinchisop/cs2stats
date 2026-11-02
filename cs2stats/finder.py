@@ -7,6 +7,8 @@ import gzip
 import os
 import re
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +48,17 @@ def cs2_game_dir() -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def cs2_running() -> bool:
+    """Si CS2 está abierto. Tarda unas décimas: llamarla fuera del hilo de la ventana."""
+    try:
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        result = subprocess.run(["tasklist", "/FI", "IMAGENAME eq cs2.exe", "/NH"], capture_output=True, text=True,
+                                errors="ignore", timeout=10, creationflags=flags)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return "cs2.exe" in result.stdout.lower()
 
 
 def steam_accounts() -> list[tuple[int, str]]:

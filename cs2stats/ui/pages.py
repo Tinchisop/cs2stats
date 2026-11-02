@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QFrame, QGridLay
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..i18n import language, t
-from ..benchmarks import BY_KEY, derived, tier_label
+from ..benchmarks import BY_KEY, MIN_SAMPLES, against_level, derived, tier_label
+from ..faceit import LEVEL_COLORS, LEVELS, games_to_level, level_at, level_progress
+from ..sessions import analyze_sessions, tilt_warning
 from ..insights import Insight, analyze
 from ..progress import premier_forecast
 from ..metrics import SOURCE_NAMES, by_key, map_label, summarize, weapon_label
@@ -174,6 +176,21 @@ def premier_cell(rating: int | None, change: float | None = None, height: int = 
     return holder
 
 
+def faceit_cell(entry: dict, change: int | None = None) -> QWidget:
+    """Celda de tabla con el logo del nivel de FACEIT y, si se sabe, el ELO ganado o perdido."""
+    holder = QWidget()
+    row = QHBoxLayout(holder)
+    row.setContentsMargins(6, 0, 6, 0)
+    row.setSpacing(6)
+    row.addWidget(FaceitLevel.of(entry, 30))
+    if change is not None:
+        delta = label(f"{change:+d}", "smallMuted")
+        delta.setStyleSheet(f"color: {GOOD if change >= 0 else BAD}; font-weight: 700;")
+        row.addWidget(delta)
+    row.addStretch(1)
+    return holder
+
+
 def delta_chip(comp, compact: bool = False) -> QLabel:
     """'+12 %' verde o rojo según si es bueno, con el percentil en el tooltip."""
     if comp is None or comp.delta is None or comp.average is None:
@@ -306,6 +323,9 @@ class ProfilePage(Page):
         self.view = view
         self.rebuild()
         body = self.body
+        tilt = self._tilt(view)
+        if tilt:
+            body.addWidget(tilt)
         body.addWidget(self._header(view))
         if not view["steam"]["codes"] or not view["steam"]["gc"]:
             notice = panel("notice")
@@ -378,9 +398,16 @@ class ProfilePage(Page):
         if view.get("mode") == "faceit" and len(elo) >= 2:
             box, layout = card(t("ELO de FACEIT"), t("Cada vez que la app lee tu cuenta"))
             chart = TrendChart()
-            chart.set_data([{"value": e["elo"], "label": short_date(e["at"])[:5], "won": True,
-                             "tip": t("{0} ELO · nivel {1}").format(e["elo"], e["level"])} for e in elo[-40:]],
-                           decimals=0, color="#ff5500")
+            shown = elo[-40:]
+            progress = level_progress(shown[-1]["elo"])
+            chart.set_data([{"value": e["elo"], "label": short_date(e["at"])[:5],
+                             "won": index == 0 or e["elo"] >= shown[index - 1]["elo"],
+                             "tip": t("{0} ELO · nivel {1}").format(e["elo"], e["level"])} for index, e in enumerate(shown)],
+                           decimals=0, color="#ff5500",
+                           reference=shown[-1]["elo"] + progress[1] if progress else None,
+                           reference_label=t("Nivel {0}").format(progress[2]) if progress else "",
+                           levels=[(start, LEVEL_COLORS[level], t("Nivel {0}").format(level)) for level, start in LEVELS
+                                   if not progress or level != progress[2]])
             layout.addWidget(chart)
             body.addWidget(box)
         if len(premier) >= 2 and view.get("mode") in ("", "premier", None):
@@ -397,6 +424,17 @@ class ProfilePage(Page):
             layout.addWidget(chart)
             body.addWidget(box)
         body.addStretch(1)
+
+    def _tilt(self, view: dict) -> QWidget | None:
+        """Aviso de racha mala arriba de todo, solo mientras estás jugando."""
+        text = tilt_warning(analyze_sessions(view["rows"]), view["rows"])
+        if not text:
+            return None
+        box = panel("badCard")
+        row = QHBoxLayout(box)
+        row.setContentsMargins(16, 10, 16, 10)
+        row.addWidget(label(text, "insightTitle", wrap=True), 1)
+        return box
 
     def _header(self, view: dict) -> QWidget:
         box = panel("heroCard")
@@ -421,7 +459,7 @@ class ProfilePage(Page):
             sub = t('{0} partidas con demo analizada').format(len(view['matches']))
         if mode:
             sub = f"{mode} · {sub}"
-        note = label(sub, "smallMuted")
+        note = label(sub, "smallMuted", wrap=True)   # con FACEIT al lado de Premier, el lugar es justo
         note.setStyleSheet(f"color: {ACCENT_SOFT}; font-size: 12px;")
         text.addWidget(note)
         text.addStretch(1)
@@ -429,7 +467,15 @@ class ProfilePage(Page):
         row.addSpacing(6)
         row.addWidget(panel("heroDivider"))
         row.addSpacing(6)
-        row.addLayout(self._faceit_block(view) if view.get("mode") == "faceit" else self._premier_block(view), 1)
+        if view.get("mode") == "faceit":
+            row.addLayout(self._faceit_block(view), 1)
+        else:
+            row.addLayout(self._premier_block(view), 1)
+            if (view.get("faceit") or {}).get("elo"):
+                row.addSpacing(6)
+                row.addWidget(panel("heroDivider"))
+                row.addSpacing(6)
+                row.addLayout(self._faceit_block(view), 1)
         buttons = QVBoxLayout()
         buttons.setSpacing(8)
         sync = QPushButton(t("Buscar partidas"))
@@ -496,7 +542,6 @@ class ProfilePage(Page):
 
     def _faceit_block(self, view: dict) -> QVBoxLayout:
         """En el modo FACEIT: tu nivel, tu ELO y cuánto falta para el próximo nivel."""
-        from ..faceit import level_progress
         me = view.get("faceit") or {}
         col = QVBoxLayout()
         col.setSpacing(6)
@@ -515,11 +560,23 @@ class ProfilePage(Page):
         col.addLayout(top)
         if progress:
             share, missing, following = progress
-            from ..faceit import LEVEL_COLORS
             bar = TierProgress(share, LEVEL_COLORS[following])
+            bar.setMinimumWidth(120)
             bar.setMaximumWidth(320)
             col.addWidget(bar)
-            col.addWidget(label(t("+{0} de ELO para el nivel {1}").format(missing, following), "tierNote"))
+            col.addWidget(label(t("+{0} de ELO para el nivel {1}").format(missing, following), "tierNote", wrap=True))
+            forecast = games_to_level(me["elo"], view.get("all_history") or [], view.get("faceit_changes") or {})
+            if forecast:
+                wins, games, known = forecast
+                if wins == 1:
+                    text = t("Con una victoria llegás")
+                elif games:
+                    text = t("A tu ritmo, unas {0} partidas (o {1} victorias seguidas)").format(games, wins)
+                elif known:
+                    text = t("Unas {0} victorias: últimamente el ELO no te viene subiendo").format(wins)
+                else:
+                    text = t("Unas {0} victorias seguidas").format(wins)
+                col.addWidget(label(text, "tierNote", wrap=True))
         elif me.get("elo"):
             col.addWidget(label(t("Nivel 10: el más alto de FACEIT"), "tierNote"))
         else:
@@ -549,7 +606,7 @@ class ProfilePage(Page):
             col.addWidget(bar)
             note = (t("+{0} pts para el siguiente rango ({1})").format(fmt_num(missing, 0), t(following)) if following
                     else t("Estás en el rango más alto"))
-            col.addWidget(label(note, "tierNote"))
+            col.addWidget(label(note, "tierNote", wrap=True))
         else:
             col.addWidget(label(t("Jugá Premier para ver tu rating acá"), "tierNote"))
         col.addStretch(1)
@@ -805,7 +862,7 @@ class StreakStrip(QFrame):
 class MatchesPage(Page):
     delete_requested = Signal(int)
     play_map = Signal(str)
-    HEADERS = [t("Fecha"), t("Modo"), t("Mapa"), t("Resultado"), "K", "A", "D", "+/-", t("ADR"), t("HS %"), t("Rating"), t("Premier"), t("Datos")]
+    HEADERS = [t("Fecha"), t("Modo"), t("Mapa"), t("Resultado"), "K", "A", "D", "+/-", t("ADR"), t("HS %"), t("Rating"), t("Rango"), t("Datos")]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -865,6 +922,11 @@ class MatchesPage(Page):
             # Premier con la placa del juego.
             if r.get("premier_value"):
                 self.table.setCellWidget(index, 11, premier_cell(r["premier_value"], r.get("premier_change"), 22))
+            # FACEIT con el logo de tu nivel en ese momento.
+            elif r["mode"] == "faceit":
+                entry = level_at(r["played_at"], view.get("faceit_elo") or [], view.get("faceit") or {})
+                if entry.get("level"):
+                    self.table.setCellWidget(index, 11, faceit_cell(entry, r.get("elo_change")))
         self.table.setUpdatesEnabled(True)
         fit_table(self.table, 42)
 
@@ -934,6 +996,9 @@ class RankPage(Page):
             group.addButton(seg)
             top.addWidget(seg, 0, Qt.AlignmentFlag.AlignTop)
         body.addLayout(top)
+        goal = self._next_level(view)
+        if goal:
+            body.addWidget(goal)
         comps = view["recent_comparisons"] if self.scope == "recent" else view["comparisons"]
         radar = radar_card(comps, t("Pasá el mouse por cada área"))
         radar.setFixedHeight(360)
@@ -966,6 +1031,31 @@ class RankPage(Page):
             layout.addLayout(grid)
             body.addWidget(box)
         body.addStretch(1)
+
+    def _next_level(self, view: dict) -> QFrame | None:
+        """Qué te falta mejorar para jugar como los del próximo nivel de FACEIT."""
+        level = (view.get("faceit") or {}).get("level")
+        rounds = [r for m in view["all_matches"] if m["source"] == "faceit" for r in m["rounds"]]
+        if not level or level >= 10 or not rounds:
+            return None
+        target = level + 1
+        comps, count = against_level(summarize(rounds), view.get("samples") or [], view.get("faceit_levels") or {}, target)
+        box, layout = card(t("Para jugar como un nivel {0}").format(target),
+                           t("Tus partidas de FACEIT contra los nivel {0} de tus demos").format(target))
+        if not comps:
+            layout.addWidget(label(t("Todavía hay pocos datos de jugadores nivel {0} en tus demos ({1} de {2}). Importá más demos de FACEIT.").format(
+                target, count, MIN_SAMPLES), "muted", wrap=True))
+            return box
+        behind = sorted((c for c in comps if c.score is not None and c.score < 50), key=lambda c: c.score)[:5]
+        if not behind:
+            layout.addWidget(label(t("Ya estás a la altura de los nivel {0} de tus demos: ahora es cuestión de ganar.").format(target), "body", wrap=True))
+        for comp in behind:
+            row = QHBoxLayout()
+            row.addWidget(label(comp.metric.label, "body"), 1)
+            row.addWidget(label(t("Vos {0} · ellos {1}").format(fmt_metric(comp.mine, comp.metric.kind), fmt_metric(comp.average, comp.metric.kind)), "muted"))
+            row.addWidget(delta_chip(comp))
+            layout.addLayout(row)
+        return box
 
     def _scope(self, key: str) -> None:
         self.scope = key

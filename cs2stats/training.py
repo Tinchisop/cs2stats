@@ -8,9 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from .benchmarks import compare
 from .i18n import t
 from .insights import pct
-from .metrics import aim_summary, map_label
+from .metrics import aim_summary, map_label, summarize
 
 
 @dataclass(frozen=True)
@@ -221,6 +222,17 @@ def weekly_challenges(matches: list[dict], now: datetime) -> tuple[list[Challeng
     rest = [k for k in ranked if k not in chosen]
     chosen.append(rest[start.isocalendar()[1] % len(rest)])
     return [options[k][1]() for k in chosen], start
+
+
+def weekly_plan(matches: list[dict], samples: list[dict], premier: int | None, now: datetime) -> list[tuple[str, list[Workout]]]:
+    """Las 3 prácticas de la semana: cada una con tus puntos más flojos hasta el lunes, así no cambian a mitad de semana."""
+    begin = week_start(now).isoformat(timespec="seconds")
+    before = [m for m in matches if (m["played_at"] or "") < begin][-10:]
+    comparisons, _reference, _count = compare(summarize([r for m in before for r in m["rounds"]]), samples, premier)
+    picks = [workout for workout, _reason, _weak in recommend(before, comparisons)]
+    first, second = picks[0], picks[1] if len(picks) > 1 else picks[0]
+    both = [first] if first is second else [first, second]
+    return [(t("Martes"), [first]), (t("Jueves"), [second]), (t("Sábado"), both)]
 
 
 def past_weeks(matches: list[dict], now: datetime, count: int = 6) -> list[tuple[datetime, int, int]]:

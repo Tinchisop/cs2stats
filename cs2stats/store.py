@@ -30,13 +30,15 @@ class Settings:
                 "api_key": "", "auth_code": "", "last_sharecode": "", "gc_token": "", "gc_account": "",
                 "history_synced_at": "", "steam_synced_at": "", "steam_error": "",
                 # Mensaje de Steam al terminar cada partida (lo manda la cuenta secundaria a tu cuenta)
-                "steam_message": True, "message_pending": {}, "message_status": "",
+                "steam_message": True, "message_pending": {}, "message_status": "", "message_sent": [],
                 # Música del mapa al abrir una partida o tocar un mapa
                 "map_music": True, "music_volume": 45,
                 # Metas propias: [{"kind", "target", "start"}]
                 "goals": [],
                 # FACEIT: clave de la API de datos (opcional), tu perfil y cuándo se trajeron tus partidas
                 "faceit_key": "", "faceit_profile": {}, "faceit_synced_at": "",
+                # Nivel de los jugadores de tus demos de FACEIT: {steamid: {"level", "elo", "at"}}
+                "faceit_levels": {},
                 # Modo elegido arriba ("" = todos): cada modo muestra sus números por separado
                 "mode_filter": "premier"}
     SECRETS = {"api_key", "auth_code", "gc_token", "faceit_key"}
@@ -247,6 +249,17 @@ class Store:
                     r.setdefault("kill_spots", [])
                     r.setdefault("death_spot", None)
                 self.db.execute("UPDATE matches SET rounds_json=? WHERE id=?", (json.dumps(rounds), match_id))
+                self._commit()
+
+    def mark_no_duels(self, match_id: int) -> None:
+        """La demo ya no está: la partida queda sin las métricas de duelos (y no se reintenta)."""
+        with self.lock:
+            row = self.db.execute("SELECT aim_json FROM matches WHERE id=?", (match_id,)).fetchone()
+            if row and row[0]:
+                aim = json.loads(row[0])
+                for raw in aim.values():
+                    raw.setdefault("preaim_n", 0)
+                self.db.execute("UPDATE matches SET aim_json=? WHERE id=?", (json.dumps(aim), match_id))
                 self._commit()
 
     def grids(self) -> list[tuple[str, list]]:

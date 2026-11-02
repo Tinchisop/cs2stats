@@ -87,7 +87,8 @@ def lobby_samples(matches: list[dict]) -> list[dict]:
             stats = player.get("stats")
             if player.get("me") or not stats or (stats.get("rounds") or 0) < MIN_ROUNDS:
                 continue
-            samples.append({"premier": player.get("premier"), "values": derived(stats), "source": m.get("source")})
+            samples.append({"premier": player.get("premier"), "values": derived(stats), "source": m.get("source"),
+                            "steamid": player.get("steamid")})
     return samples
 
 
@@ -122,6 +123,17 @@ def compare(my_stats: dict, samples: list[dict], my_rating: int | None) -> tuple
     else:
         pool = samples
         reference = t("todos los jugadores de tus partidas")
+    return _against(my_stats, pool), reference, len(pool)
+
+
+def against_level(my_stats: dict, samples: list[dict], levels: dict, target: int) -> tuple[list[Comparison], int]:
+    """Tus números contra los jugadores de ese nivel de FACEIT de tus demos. Sin jugadores suficientes, lista vacía."""
+    pool = [s for s in samples if s.get("source") == "faceit"
+            and (levels.get(str(s.get("steamid"))) or {}).get("level") == target]
+    return (_against(my_stats, pool) if len(pool) >= MIN_SAMPLES else []), len(pool)
+
+
+def _against(my_stats: dict, pool: list[dict]) -> list[Comparison]:
     mine = derived(my_stats)
     result = []
     for metric in METRICS:
@@ -133,7 +145,7 @@ def compare(my_stats: dict, samples: list[dict], my_rating: int | None) -> tuple
             below = sum(1 for v in values if v < value) + 0.5 * sum(1 for v in values if v == value)
             percentile = 100 * below / len(values)
         result.append(Comparison(metric, value, average, percentile, len(values)))
-    return result, reference, len(pool)
+    return result
 
 
 def highlights(comparisons: list[Comparison], count: int = 3) -> tuple[list[Comparison], list[Comparison]]:

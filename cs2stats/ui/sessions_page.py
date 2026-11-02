@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from ..i18n import t
-from ..sessions import MIN_GAMES, Bucket, Report, analyze_sessions, current_advice
+from ..sessions import MIN_GAMES, Bucket, Report, analyze_sessions, current_advice, tilt_warning
 from .pages import Page, card, cell, chip, empty_state, fit_table, rating_cell, table
 from .theme import BAD, GOOD, MUTED, fmt_num, fmt_pct, label, panel
 
@@ -24,19 +24,19 @@ class SessionsPage(Page):
                                "{0} partidas en {1} sesiones, con {2} partidas por sesión en promedio.").format(
             report.games, report.sessions, fmt_num(report.average_length, 1)), "pageLead", wrap=True))
         if report.current:
-            body.addWidget(self._current(report))
+            body.addWidget(self._current(report, view["rows"]))
         body.addWidget(self._findings(report))
         body.addWidget(self._table(t("Según la partida de la sesión"), t("Si el cansancio te pesa, se ve acá"), report.positions))
         body.addWidget(self._table(t("Según cómo venías"), t("Dentro de la misma sesión"), report.momentum))
         body.addWidget(self._table(t("Según el horario"), t("Hora de tu PC"), report.bands))
         body.addStretch(1)
 
-    def _current(self, report: Report):
+    def _current(self, report: Report, rows: list[dict]):
         games = report.current
         wins = sum(1 for g in games if g["result"] == "W")
         losses = sum(1 for g in games if g["result"] == "L")
         box, layout = card(t("Tu sesión de ahora"), t("{0} partidas · {1} ganadas · {2} perdidas").format(len(games), wins, losses))
-        advice = current_advice(report)
+        advice = tilt_warning(report, rows) or current_advice(report)
         layout.addWidget(label(advice or t("Por ahora, nada que te haga cortar."), "body", wrap=True))
         return box
 

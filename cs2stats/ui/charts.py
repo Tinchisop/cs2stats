@@ -157,6 +157,7 @@ class TrendChart(Growing, QWidget):
         self.color = ACCENT
         self.forecast: list[float] = []      # valores esperados de las próximas partidas (línea punteada)
         self.band: tuple[float, float] | None = None
+        self.levels: list[tuple[float, str, str]] = []   # líneas fijas: (valor, color, texto)
         self._hits: list[tuple[QPointF, str]] = []
         self.setMinimumHeight(220)
         self.setMouseTracking(True)
@@ -164,8 +165,8 @@ class TrendChart(Growing, QWidget):
 
     def set_data(self, points: list[dict], average=None, reference=None, reference_label: str = "",
                  decimals: int = 2, suffix: str = "", color: str = ACCENT, forecast: list[float] | None = None,
-                 band: tuple[float, float] | None = None) -> None:
-        self.forecast, self.band = forecast or [], band
+                 band: tuple[float, float] | None = None, levels: list[tuple[float, str, str]] | None = None) -> None:
+        self.forecast, self.band, self.levels = forecast or [], band, levels or []
         self.points, self.average, self.reference, self.reference_label = points, average, reference, reference_label
         self.decimals, self.suffix, self.color = decimals, suffix, color
         if self.isVisible():
@@ -218,6 +219,16 @@ class TrendChart(Growing, QWidget):
             painter.drawLine(QPointF(area.left(), y), QPointF(area.right(), y))
             painter.setPen(QColor(color))
             painter.drawText(QRectF(area.right() - 260, y - 17, 260, 15), Qt.AlignmentFlag.AlignRight, text)
+
+        for value, color, text in self.levels:
+            if low < value < high:
+                y = y_of(value)
+                line_color = QColor(color)
+                line_color.setAlpha(120)
+                painter.setPen(QPen(line_color, 1, Qt.PenStyle.DashLine))
+                painter.drawLine(QPointF(area.left(), y), QPointF(area.right(), y))
+                painter.setPen(QColor(color))
+                painter.drawText(QRectF(area.left() + 4, y - 16, 120, 15), Qt.AlignmentFlag.AlignLeft, text)
 
         mapped = [(i, QPointF(x_of(i), y_of(p["value"])), p) for i, p in enumerate(self.points) if p["value"] is not None]
         line = [q for _, q, _ in mapped]

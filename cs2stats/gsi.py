@@ -8,6 +8,7 @@ proceso del juego ni su memoria.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,6 +45,18 @@ def cfg_text(port: int, token: str) -> str:
     }}
 }}
 '''
+
+
+def installed_token(game_dir: Path | None) -> str:
+    """Clave del archivo que ya está en la carpeta de CS2. CS2 lee ese archivo solo al abrir: si la app lo cambiara
+    con el juego abierto, sus avisos llegarían con la clave vieja y se descartarían sin que nadie se entere."""
+    if not game_dir:
+        return ""
+    try:
+        found = re.search(r'"token"\s+"([^"]+)"', cfg_path(game_dir).read_text(encoding="utf-8"))
+    except OSError:
+        return ""
+    return found.group(1) if found else ""
 
 
 def install(game_dir: Path, port: int, token: str) -> Path:

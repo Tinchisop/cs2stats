@@ -2,7 +2,9 @@
 
 import os
 import tempfile
+import time
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 os.environ["CS2STATS_HOME"] = tempfile.mkdtemp(prefix="cs2stats-test-")
@@ -78,7 +80,7 @@ class ParserTest(unittest.TestCase):
     def test_otra_cuenta(self):
         from cs2stats.parser import NotInDemo, parse_demo
         with self.assertRaises(NotInDemo):
-            parse_demo(str(NUKE), 76561197960265728 + 807884606)
+            parse_demo(str(NUKE), ME)
 
 
 class AimTest(unittest.TestCase):
@@ -98,6 +100,26 @@ class AimTest(unittest.TestCase):
                              "spray_hits", "strafe_shots", "strafe_ok", "gun_hits", "head_hits", "ttd_sum", "ttd_n",
                              "xhair_sum", "xhair_n"), 0)
         self.assertIsNone(aim_summary(raw)["accuracy"])
+
+
+class DuelosTest(unittest.TestCase):
+    BASE = {"shots": 10, "hits": 2, "seen_shots": 5, "seen_hits": 1, "first_shots": 3, "first_hits": 1, "spray_shots": 2,
+            "spray_hits": 0, "strafe_shots": 3, "strafe_ok": 2, "gun_hits": 2, "head_hits": 1, "ttd_sum": 100.0, "ttd_n": 1,
+            "xhair_sum": 20.0, "xhair_n": 4}
+
+    def test_resumen(self):
+        from cs2stats.metrics import aim_summary
+        aim = aim_summary({**self.BASE, "preaim_ok": 1, "preaim_n": 4, "xhair_v_sum": 8.0, "fire_sum": 900.0, "fire_n": 3,
+                           "duels": 4, "duels_first": 3, "death_n": 5, "death_no_shot": 2, "death_unseen": 1})
+        self.assertEqual((aim["preaim"], aim["head_level"], aim["time_to_fire"]), (0.25, 2.0, 300.0))
+        self.assertEqual((aim["shot_first"], aim["death_no_shot"], aim["death_unseen"]), (0.75, 0.4, 0.2))
+
+    def test_partida_vieja_sin_duelos(self):
+        from cs2stats.metrics import aim_summary
+        aim = aim_summary(self.BASE)
+        self.assertEqual(aim["crosshair"], 5.0)
+        for key in ("preaim", "head_level", "time_to_fire", "shot_first", "death_no_shot", "death_unseen"):
+            self.assertIsNone(aim[key])
 
 
 class DetailTest(unittest.TestCase):
@@ -596,6 +618,166 @@ class FaceitTest(unittest.TestCase):
         share, missing, following = level_progress(1580)
         self.assertEqual((missing, following), (171, 9))
         self.assertIsNone(level_progress(2400))
+
+    def test_nivel_en_cada_fecha(self):
+        from cs2stats.faceit import level_at
+        log = [{"at": "2026-10-01T10:00:00", "elo": 1500, "level": 7}, {"at": "2026-10-20T10:00:00", "elo": 1600, "level": 8}]
+        self.assertEqual(level_at("2026-10-10T00:00:00", log, {})["level"], 7)
+        self.assertEqual(level_at("2026-10-25T00:00:00", log, {})["level"], 8)
+        self.assertEqual(level_at("2026-09-01T00:00:00", log, {})["level"], 7)    # antes del primer dato
+        self.assertEqual(level_at("2026-10-25T00:00:00", [], {"level": 5})["level"], 5)
+
+    def test_elo_por_partida(self):
+        from cs2stats.faceit import elo_changes, games_to_level
+        history = [{"key": "a", "mode": "faceit", "played_at": "2026-10-01T10:00:00", "duration": "40 min", "result": "W"},
+                   {"key": "b", "mode": "faceit", "played_at": "2026-10-02T10:00:00", "duration": "40 min", "result": "L"},
+                   {"key": "c", "mode": "faceit", "played_at": "2026-10-02T11:00:00", "duration": "40 min", "result": "W"}]
+        log = [{"at": "2026-10-01T09:00:00", "elo": 1500}, {"at": "2026-10-01T11:00:00", "elo": 1525},
+               {"at": "2026-10-03T09:00:00", "elo": 1530}]
+        self.assertEqual(elo_changes(history, log), {"a": 25})   # b y c cayeron juntas: no se puede repartir
+        wins, games, known = games_to_level(1525, history, {"a": 25})
+        self.assertEqual((wins, games, known), (1, None, False))
+        many = [dict(h, key=str(i), played_at=f"2026-10-{i + 1:02d}T10:00:00") for i, h in enumerate(history * 2)]
+        self.assertEqual(games_to_level(1531 - 100, many, {str(i): 10 for i in range(6)}), (10, 10, True))
+
+    def test_veto_y_racha(self):
+        from datetime import datetime
+        from cs2stats.prematch import analyze
+        from cs2stats.sessions import analyze_sessions, tilt_warning
+        report = analyze(ME, [], [], [], [{"map": "Mirage", "result": "W"}] * 8 + [{"map": "Nuke", "result": "L"}] * 8,
+                         ["de_mirage", "de_nuke", "de_inferno"])
+        self.assertEqual(report["keep"], "mirage")
+        self.assertEqual(report["bans"][0], "nuke")
+        rows = [{"played_at": f"2026-10-01T{10 + i}:00:00", "result": "L", "rating": 0.7} for i in range(3)]
+        rows = [{"played_at": f"2026-09-{i + 1:02d}T10:00:00", "result": "W", "rating": 1.2} for i in range(6)] + rows
+        text = tilt_warning(analyze_sessions(rows, datetime(2026, 10, 1, 13)), rows)
+        self.assertIn("3", text)
+        self.assertEqual(tilt_warning(analyze_sessions(rows, datetime(2026, 10, 9)), rows), "")
+
+    def test_contra_el_nivel_siguiente(self):
+        from cs2stats.benchmarks import against_level
+        from cs2stats.metrics import summarize
+        samples = [{"source": "faceit", "steamid": i, "values": {"adr": 90.0}} for i in range(12)]
+        levels = {str(i): {"level": 9} for i in range(12)}
+        comps, count = against_level(summarize([]), samples, levels, 9)
+        self.assertEqual(count, 12)
+        self.assertTrue(comps)
+        self.assertEqual(against_level(summarize([]), samples, levels, 10), ([], 0))
+
+    def test_plan_semanal(self):
+        from datetime import datetime
+        from cs2stats.training import weekly_plan
+        plan = weekly_plan([], [], None, datetime(2026, 11, 2, 12))
+        self.assertEqual(len(plan), 3)
+        self.assertTrue(all(workouts for _day, workouts in plan))
+
+    def test_niveles_de_los_jugadores(self):
+        from unittest import mock
+        from cs2stats import faceit
+        from cs2stats.prematch import LobbyError
+        from cs2stats.store import Settings
+        settings = Settings(Path(tempfile.mkdtemp(prefix="cs2stats-niveles-")) / "a.json")
+        matches = [{"source": "premier", "scoreboard": [{"steamid": 9}]},
+                   {"source": "faceit", "scoreboard": [{"steamid": ME, "me": True}, {"steamid": 1}, {"steamid": 2}]}]
+        asked = []
+
+        def fake_profile(_key, steamid):
+            asked.append(steamid)
+            if steamid == 2:
+                raise LobbyError(faceit.t("No hay una cuenta de FACEIT con CS2 asociada a tu cuenta de Steam."))
+            return {"level": 6, "elo": 1250}
+        with mock.patch.object(faceit, "profile", fake_profile):
+            faceit.update_levels("x", settings, matches)
+            faceit.update_levels("x", settings, matches)   # ya los conoce: no vuelve a preguntar
+        self.assertEqual(asked, [1, 2])
+        self.assertEqual(settings["faceit_levels"]["1"]["level"], 6)
+        self.assertIsNone(settings["faceit_levels"]["2"]["level"])
+
+
+class AvisoRapidoTest(unittest.TestCase):
+    """Fin de partida: la clave de CS2 no se pisa y el mensaje sale una sola vez, sin esperar media hora."""
+
+    class FakeStore:
+        def __init__(self, matches):
+            self.items = matches
+
+        def matches(self, _steamid):
+            return self.items
+
+    class FakeSettings(dict):
+        def set(self, key, value):
+            self[key] = value
+
+    def deliver(self, matches, pending):
+        from cs2stats import sync
+        settings = self.FakeSettings(steamid=ME, steam_message=True, message_pending=pending, message_sent=[])
+        sent = []
+        original = sync.send_summary
+        sync.send_summary = lambda _settings, text, _log: sent.append(text)
+        try:
+            sync.deliver_pending_message(self.FakeStore(matches), settings, lambda _text: None)
+            sync.deliver_pending_message(self.FakeStore(matches), settings, lambda _text: None)
+        finally:
+            sync.send_summary = original
+        return sent, settings
+
+    def match(self, minutes_ago=30, **extra):
+        played = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat(timespec="seconds")
+        return {"match_key": "a", "map": "de_nuke", "played_at": played, "score_us": 13, "score_them": 5, **extra}
+
+    def pending(self, minutes_ago=1):
+        ended = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat(timespec="seconds")
+        return {"ended_at": ended, "map": "de_nuke", "score_us": 13, "score_them": 5, "kills": 20, "deaths": 9, "assists": 2, "mvps": 3}
+
+    def test_clave_instalada(self):
+        from cs2stats import gsi
+        folder = Path(tempfile.mkdtemp())
+        self.assertEqual(gsi.installed_token(folder), "")
+        gsi.install(folder, 47321, "abc123")
+        self.assertEqual(gsi.installed_token(folder), "abc123")
+
+    def test_mensaje_sin_aviso_de_cs2_sale_una_vez(self):
+        sent, _ = self.deliver([self.match()], {})
+        self.assertEqual(len(sent), 1)
+
+    def test_partida_vieja_no_manda_mensaje(self):
+        sent, _ = self.deliver([self.match(minutes_ago=600)], {})
+        self.assertEqual(sent, [])
+
+    def test_demora_manda_el_corto_y_despues_el_completo(self):
+        sent, settings = self.deliver([], self.pending(minutes_ago=4))
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(settings["message_pending"], {})
+
+    def test_antes_de_tiempo_espera_la_demo(self):
+        sent, settings = self.deliver([], self.pending(minutes_ago=1))
+        self.assertEqual(sent, [])
+        self.assertTrue(settings["message_pending"])
+
+    def test_demo_lista_limpia_el_pendiente(self):
+        sent, settings = self.deliver([self.match()], self.pending())
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(settings["message_pending"], {})
+
+    def test_demo_recien_terminada_no_queda_vencida(self):
+        from cs2stats import steamapi, sync
+        updates = []
+
+        class Store:
+            def update_sharecode(self, _code, **fields):
+                updates.append(fields)
+
+        def missing(*_args, **_kwargs):
+            raise steamapi.SteamError(sync.t("Valve ya borró esa demo de sus servidores."))
+
+        original = steamapi.download_demo
+        steamapi.download_demo = missing
+        try:
+            sync._download_and_import(Store(), {}, "c", "http://x/a.dem.bz2", int(time.time()) - 600, lambda _text: None)
+            sync._download_and_import(Store(), {}, "c", "http://x/a.dem.bz2", int(time.time()) - 86400, lambda _text: None)
+        finally:
+            steamapi.download_demo = original
+        self.assertEqual([u["status"] for u in updates], ["con_url", "vencida"])
 
 
 if __name__ == "__main__":

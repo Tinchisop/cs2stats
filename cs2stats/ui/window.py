@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -22,11 +23,12 @@ from ..steamapi import SteamError
 from ..store import IMPORT_DATE_MARGIN, PARSER_VERSION, Settings, Store, data_dir
 from ..i18n import LANGUAGES, language, t
 from ..resumen import match_message
-from ..sync import build_replay, reload_saved_history, send_summary, steam_ready, sync_history, sync_steam
+from ..sync import (URGENT, build_replay, reload_saved_history, send_summary, steam_ready, sync_history, sync_if_playing,
+                    sync_steam)
 from ..assets import (MAP_MUSIC, avatar_path, download_avatar, download_player_avatars, extract_game_assets,
                       extract_map_music, extract_overviews, map_music)
 from ..demoview import DemoViewError, open_moment
-from ..faceit import sync_faceit
+from ..faceit import elo_changes, level_at, link_demo_changes, sync_faceit
 from ..prematch import LobbyError, collect, detect_party
 from ..nades import MapGrid
 from ..nades import build_lineups
@@ -49,6 +51,9 @@ from .training_page import TrainingPage
 
 RUN_KEY = t(r"Software\Microsoft\Windows\CurrentVersion\Run")
 RUN_NAME = t("CS2 Stats")
+STEAM_TICK = 2           # minutos entre búsquedas si CS2 está abierto (cerrado, una cada 20)
+FAST_POLL_SECONDS = 20   # al terminar una partida se pregunta así de seguido...
+FAST_POLL_MINUTES = 15   # ...durante este tiempo o hasta que se importe
 log = logging.getLogger("cs2stats")
 # Aviso al cambiar de idioma, en el idioma nuevo (la app sigue en el anterior hasta reabrirla).
 EN_RESTART = "The language changes the next time you open the app."
@@ -206,7 +211,7 @@ def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
                      "us": m["score_us"], "them": m["score_them"], "k": s["kills"], "a": s["assists"], "d": s["deaths"],
                      "adr": s["adr"], "hs": (s["hs"] or 0) * 100 if s["hs"] is not None else None, "rating": s["rating"],
                      "premier": premier, "premier_value": m.get("rank_new") if m.get("rank_type") == 11 else None,
-                     "premier_change": m.get("rank_change")})
+                     "premier_change": m.get("rank_change"), "elo_change": m.get("elo_change")})
 
     by_result: dict[tuple, list[datetime]] = {}
     for m in demos:
@@ -230,7 +235,7 @@ def unify_rows(demos: list[dict], history: list[dict]) -> list[dict]:
             continue
         rows.append({"id": None, "played_at": h["played_at"], "mode": h["mode"], "map": h["map"], "result": h["result"],
                      "us": h["score_us"], "them": h["score_them"], "k": h["kills"], "a": h["assists"], "d": h["deaths"],
-                     "adr": h.get("adr"), "hs": h["hsp"], "rating": None, "premier": ""})
+                     "adr": h.get("adr"), "hs": h["hsp"], "rating": None, "premier": "", "elo_change": h.get("elo_change")})
     rows.sort(key=lambda r: r["played_at"] or "")
     return rows
 
@@ -416,8 +421,12 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.scan)
         self.timer.start(120_000)
         self.steam_timer = QTimer(self)
-        self.steam_timer.timeout.connect(self.start_steam_sync)
-        self.steam_timer.start(20 * 60_000)
+        self.steam_timer.timeout.connect(self._steam_tick)
+        self.steam_timer.start(STEAM_TICK * 60_000)
+        self.steam_ticks = 0
+        self.fast_timer = QTimer(self)
+        self.fast_timer.timeout.connect(self._fast_poll)
+        self.fast_until = 0.0
         self.go("perfil")
         self.refresh()
         QTimer.singleShot(0, lambda: self._place_indicator(False))
@@ -425,7 +434,6 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(800, self.load_assets)
         QTimer.singleShot(1500, self.start_steam_sync)
         QTimer.singleShot(2500, self.start_faceit_sync)
-        self.steam_timer.timeout.connect(self.start_faceit_sync)
         if not start_hidden:
             self.show()
 
@@ -686,6 +694,11 @@ class MainWindow(QMainWindow):
         mode = self.mode.currentData()
         matches = [m for m in all_matches if not mode or m["source"] == mode]
         history = [h for h in all_history if not mode or h["mode"] == mode]
+        faceit_elo = self.store.faceit_elo()
+        changes = elo_changes(all_history, faceit_elo)
+        for h in all_history:
+            h["elo_change"] = changes.get(h["key"])
+        link_demo_changes(all_matches, all_history, changes)
         n = self.recent_n.currentData() or 10
         recent = matches[-n:]
         name = next((m["my_name"] for m in reversed(all_matches) if m["my_name"]), "")
@@ -712,7 +725,8 @@ class MainWindow(QMainWindow):
             "comparisons": comparisons, "recent_comparisons": recent_comparisons, "reference": reference,
             "reference_n": reference_n, "highlights": highlights(comparisons), "rows": unify_rows(matches, history),
             "steam": steam_ready(self.settings), "mode": mode,
-            "faceit": self.settings["faceit_profile"] or {}, "faceit_elo": self.store.faceit_elo(),
+            "faceit": self.settings["faceit_profile"] or {}, "faceit_elo": faceit_elo, "faceit_changes": changes,
+            "faceit_levels": self.settings["faceit_levels"], "samples": samples,
         }
         self.stale = set(self.pages)
         self._update_page(self.current_page)
@@ -827,6 +841,27 @@ class MainWindow(QMainWindow):
         if self.steam_runner.start(lambda say: sync_steam(self.store, self.settings, say)):
             self.refresh_connect()
 
+    def _steam_tick(self) -> None:
+        """Cada 20 minutos una búsqueda completa; entre medio, una rápida si estás jugando."""
+        self.steam_ticks += 1
+        if self.steam_ticks * STEAM_TICK >= 20:
+            self.steam_ticks = 0
+            self.start_steam_sync()
+            self.start_faceit_sync()
+        elif steam_ready(self.settings)["codes"]:
+            self.steam_runner.start(lambda say: sync_if_playing(self.store, self.settings, say))
+
+    def _fast_poll(self) -> None:
+        """Después de una partida, pregunta seguido hasta que aparezca: Valve la publica cuando puede."""
+        if time.monotonic() >= self.fast_until:
+            self._stop_fast_poll()
+        else:
+            self.steam_runner.start(lambda say: sync_steam(self.store, self.settings, say, quick=True))
+
+    def _stop_fast_poll(self) -> None:
+        self.fast_timer.stop()
+        URGENT.clear()
+
     # FACEIT
     def save_faceit_key(self, key: str) -> None:
         self.settings.set("faceit_key", key)
@@ -849,6 +884,7 @@ class MainWindow(QMainWindow):
             self.settings.set("steam_error", error)
             self.pages["conectar"].add_log(error)
         elif imported:
+            self._stop_fast_poll()
             if not self.isVisible():
                 self.tray.showMessage(t("CS2 Stats"), t('Importé {0} {1} de Steam.').format(imported, t('partida') if imported == 1 else t('partidas')),
                                       app_icon(), 6000)
@@ -1016,9 +1052,14 @@ class MainWindow(QMainWindow):
             return
         self.close_match()
         index = self.store.replay_index()
+        levels = dict(self.settings["faceit_levels"])
+        if match["source"] == "faceit":
+            levels[str(self.settings["steamid"])] = level_at(match["played_at"], self.view["faceit_elo"], self.view["faceit"])
+            if any(str(p["steamid"]) not in levels for p in match["scoreboard"]):
+                self.start_faceit_sync()   # demo nueva: los niveles de sus jugadores llegan para la próxima vez que la abras
         view = MatchView(match, None, self.view["all_matches"], t("Volver a {0}").format(self.TITLES[self.current_page]),
                          replay_loader=lambda key: (self.store.replay(key), index.get(key, {}).get("status", "")),
-                         grid=self.view.get("grids", {}).get(match["map"]))
+                         grid=self.view.get("grids", {}).get(match["map"]), faceit_levels=levels)
         view.back.connect(lambda: self.go(self.current_page))
         view.replay_requested.connect(self.start_replay)
         view.replay_tab.open_in_game.connect(lambda number, at: self.open_in_game(match["id"], number, at))
@@ -1147,6 +1188,11 @@ class MainWindow(QMainWindow):
             self.gsi_status = t("No encontré CS2 instalado en esta PC, así que no se puede activar el aviso.")
             self.gsi_dot.setText(t("●  CS2 no encontrado"))
             return
+        # Si ya hay un archivo, se usa su clave: CS2 puede estar abierto con ella y no lee el archivo de nuevo.
+        installed = gsi.installed_token(self.game_dir)
+        if installed and installed != token:
+            token = installed
+            self.settings.set("gsi_token", token)
         fresh = not gsi.is_installed(self.game_dir, port, token)
         if fresh:
             try:
@@ -1195,9 +1241,9 @@ class MainWindow(QMainWindow):
         self.refresh_demos()
         if ready["gc"] and self.settings["steam_message"]:
             self.settings.set("message_pending", data)   # sale por Steam cuando se analice la demo
-        # Valve tarda unos minutos en publicar el código y la demo. A los 31 minutos sale el mensaje aunque no haya demo.
-        for minutes in (3, 8, 20, 31):
-            QTimer.singleShot(minutes * 60_000, self.start_steam_sync)
+        URGENT.set()
+        self.fast_until = time.monotonic() + FAST_POLL_MINUTES * 60
+        self.fast_timer.start(FAST_POLL_SECONDS * 1000)
         QTimer.singleShot(90_000, self.scan)
 
     # Ventana y bandeja
