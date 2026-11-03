@@ -1,4 +1,4 @@
-"""Estilo visual: fondo azul noche, tarjetas de vidrio oscuro con borde fino, acento turquesa y números grandes."""
+"""Estilo visual: fondo azul noche con auroras, tarjetas de vidrio azulado con borde turquesa, acento turquesa y números grandes."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from PySide6.QtWidgets import QFrame, QLabel, QPushButton
 
 from ..i18n import language
 
-BG = "#0c0f13"
-SURFACE = "#151a20"
-SURFACE_2 = "#1b2128"
-BORDER = "#253039"
+BG = "#05111a"
+SURFACE = "#0c1b24"
+SURFACE_2 = "#10222c"
+BORDER = "#1b3340"
 TEXT = "#eef0f3"
 MUTED = "#8b919d"
 SUBTLE = "#5f6570"
@@ -368,11 +368,10 @@ def panel(name: str = "card") -> QFrame:
 STYLE = f"""
 QMainWindow, QDialog {{ background: {BG}; color: {TEXT}; }}
 QWidget {{ color: {TEXT}; font-family: 'Segoe UI Variable Text', 'Segoe UI'; font-size: 13px; }}
-QWidget#root {{ background: qradialgradient(cx:0.35, cy:0.0, radius:1.25, fx:0.35, fy:0.0, stop:0 #10211f, stop:0.45 #0d1418, stop:1 {BG}); }}
 QWidget#canvas {{ background: transparent; }}
 QLabel {{ background: transparent; }}
-QFrame#sidebar {{ background: qlineargradient(x1:0, y1:0, x2:0.6, y2:1, stop:0 #0f2a24, stop:0.4 #0d171a, stop:1 #0b0e12);
-                  border-right: 1px solid #1b2b2b; }}
+QFrame#sidebar {{ background: qlineargradient(x1:0, y1:0, x2:0.6, y2:1, stop:0 rgba(10,46,46,205), stop:0.4 rgba(6,24,32,205), stop:1 rgba(4,14,20,225));
+                  border-right: 1px solid rgba(34,211,166,45); }}
 QFrame#navIndicator {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(34,211,166,46), stop:1 rgba(34,211,166,10));
                        border: 1px solid rgba(34,211,166,70); border-radius: 10px; }}
 QFrame#navIndicatorBar {{ background: {ACCENT}; border-radius: 2px; }}
@@ -382,24 +381,27 @@ QPushButton#coachButton {{ background: rgba(34,211,166,30); border: 1px solid rg
                            color: {TEXT}; font-weight: 700; padding: 6px 10px; }}
 QPushButton#coachButton:hover {{ background: rgba(34,211,166,70); }}
 QFrame#sideCard {{ background: rgba(255,255,255,8); border: 1px solid rgba(255,255,255,18); border-radius: 12px; }}
-QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(26,33,40,235), stop:1 rgba(17,21,26,240));
-               border: 1px solid #232d36; border-radius: 14px; }}
-QFrame#kpiCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(30,40,46,240), stop:1 rgba(17,22,27,245));
-                  border: 1px solid #26343b; border-radius: 14px; }}
-QFrame#kpiCardHot {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(25,60,52,240), stop:1 rgba(16,26,27,245));
-                     border: 1px solid rgba(34,211,166,90); border-radius: 14px; }}
-QFrame#coachTip {{ background: rgba(255,255,255,6); border: 1px solid rgba(255,255,255,14); border-radius: 10px; }}
-QFrame#challenge {{ background: rgba(255,255,255,5); border: 1px solid rgba(255,255,255,12); border-radius: 10px; }}
-QFrame#challengeDone {{ background: rgba(63,207,142,16); border: 1px solid rgba(63,207,142,80); border-radius: 10px; }}
-QFrame#streakCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(34,211,166,22), stop:0.5 rgba(20,26,32,235), stop:1 rgba(20,26,32,235));
-                     border: 1px solid #26343b; border-radius: 14px; }}
-QFrame#cardFlat {{ background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 10px; }}
-QFrame#goodCard {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #191d24, stop:1 #14171c);
-                   border: 1px solid #262b33; border-left: 3px solid {GOOD}; border-radius: 12px; }}
-QFrame#badCard {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #191d24, stop:1 #14171c);
-                  border: 1px solid #262b33; border-left: 3px solid {BAD}; border-radius: 12px; }}
-QFrame#heroCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #10292a, stop:0.35 #121b22, stop:0.75 #141a22, stop:1 #10221f);
-                   border: 1px solid rgba(34,211,166,150); border-radius: 18px; }}
+QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(14,36,46,205), stop:1 rgba(7,20,28,220));
+               border: 1px solid rgba(70,200,190,48); border-radius: 14px; }}
+QFrame#kpiCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(16,42,52,215), stop:1 rgba(7,20,28,228));
+                  border: 1px solid rgba(70,200,190,55); border-radius: 14px; }}
+QFrame#kpiCardHot {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(18,66,60,220), stop:1 rgba(7,22,28,230));
+                     border: 1px solid rgba(34,211,166,110); border-radius: 14px; }}
+QFrame#kpiCard[tone="good"], QFrame#kpiCardHot[tone="good"] {{ border: 1px solid rgba(63,207,142,170); }}
+QFrame#kpiCard[tone="bad"], QFrame#kpiCardHot[tone="bad"] {{ border: 1px solid rgba(255,92,92,170);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(52,26,34,215), stop:1 rgba(9,20,28,228)); }}
+QFrame#coachTip {{ background: rgba(120,220,210,7); border: 1px solid rgba(90,210,200,32); border-radius: 10px; }}
+QFrame#challenge {{ background: rgba(120,220,210,6); border: 1px solid rgba(90,210,200,30); border-radius: 10px; }}
+QFrame#challengeDone {{ background: rgba(63,207,142,22); border: 1px solid rgba(63,207,142,170); border-radius: 10px; }}
+QFrame#streakCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(34,211,166,30), stop:0.5 rgba(10,28,36,215), stop:1 rgba(8,22,30,220));
+                     border: 1px solid rgba(70,200,190,55); border-radius: 14px; }}
+QFrame#cardFlat {{ background: rgba(16,36,46,200); border: 1px solid {BORDER}; border-radius: 10px; }}
+QFrame#goodCard {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(14,36,44,210), stop:1 rgba(8,22,30,220));
+                   border: 1px solid rgba(90,210,200,32); border-left: 3px solid {GOOD}; border-radius: 12px; }}
+QFrame#badCard {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(14,36,44,210), stop:1 rgba(8,22,30,220));
+                  border: 1px solid rgba(90,210,200,32); border-left: 3px solid {BAD}; border-radius: 12px; }}
+QFrame#heroCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(14,60,62,225), stop:0.35 rgba(9,32,42,225), stop:0.75 rgba(9,30,42,225), stop:1 rgba(12,50,50,225));
+                   border: 1px solid rgba(70,240,200,200); border-radius: 18px; }}
 QFrame#heroDivider {{ background: rgba(255,255,255,24); border: none; min-width: 1px; max-width: 1px; }}
 QLabel#heroValue {{ font-family: 'Segoe UI Variable Display'; font-size: 30px; font-weight: 800; }}
 QLabel#tierNote {{ color: #a8b3bb; font-size: 12px; }}
@@ -407,7 +409,7 @@ QLabel#premierChip {{ color: #c9d3da; background: rgba(255,255,255,12); border: 
                       padding: 1px 8px; font-size: 12px; font-weight: 600; }}
 QFrame#playerCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #221d18, stop:0.55 #1a1c22, stop:1 #241820);
                      border: 1px solid #5a4630; border-radius: 16px; }}
-QFrame#tableHead {{ background: #1c2027; border-radius: 8px; }}
+QFrame#tableHead {{ background: rgba(16,40,50,220); border-radius: 8px; }}
 QLabel#tableHeadText {{ color: {MUTED}; font-size: 12px; font-weight: 700; }}
 QLabel#tableSection {{ color: {MUTED}; font-size: 12px; font-weight: 800; letter-spacing: 1px; padding: 10px 12px 4px 12px; }}
 QFrame#rowAlly {{ background: rgba(90,169,255,10); border: 1px solid #22272f; border-left: 3px solid {CT_COLOR}; border-radius: 8px; }}
@@ -415,7 +417,7 @@ QFrame#rowRival {{ background: rgba(240,162,75,10); border: 1px solid #2b2620; b
 QFrame#rowMe {{ background: rgba(34,211,166,30); border: 1px solid {ACCENT}; border-left: 3px solid {ACCENT}; border-radius: 8px; }}
 QFrame#rowBest {{ background: rgba(63,207,142,16); border: 1px solid {GOOD}; border-left: 3px solid {GOOD}; border-radius: 8px; }}
 QLabel#meChip {{ color: {ON_ACCENT}; background: {ACCENT}; border-radius: 5px; padding: 1px 6px; font-size: 11px; font-weight: 800; }}
-QFrame#tile {{ background: #1c2027; border: 1px solid #2a2f37; border-radius: 10px; }}
+QFrame#tile {{ background: rgba(14,34,44,210); border: 1px solid rgba(90,210,200,34); border-radius: 10px; }}
 QFrame#tileGood {{ background: #18212c; border: 1px solid #36608f; border-radius: 10px; }}
 QFrame#tileBad {{ background: #2a181c; border: 1px solid #7a3340; border-radius: 10px; }}
 QFrame#tileUtil {{ background: #231e17; border: 1px solid #5f4424; border-radius: 10px; }}
@@ -423,7 +425,7 @@ QFrame#rowAlly:hover {{ background: rgba(90,169,255,34); border-color: #2f4a6e; 
 QFrame#rowRival:hover {{ background: rgba(240,162,75,32); border-color: #5a4329; }}
 QFrame#rowMe:hover {{ background: rgba(34,211,166,48); }}
 QFrame#rowBest:hover {{ background: rgba(63,207,142,32); }}
-QFrame#tile:hover {{ border-color: #4a515c; background: #20252d; }}
+QFrame#tile:hover {{ border-color: rgba(90,210,200,90); background: rgba(20,46,56,220); }}
 QFrame#tileGood:hover {{ border-color: {CT_COLOR}; }}
 QFrame#tileBad:hover {{ border-color: {BAD}; }}
 QFrame#tileUtil:hover {{ border-color: {T_COLOR}; }}
@@ -444,7 +446,7 @@ QPushButton#tabButton {{ background: rgba(255,255,255,8); border: 1px solid rgba
 QPushButton#tabButton:hover {{ color: {TEXT}; background: rgba(255,255,255,16); }}
 QPushButton#tabButton:checked {{ color: #6ff0cc; border-color: rgba(34,211,166,90); border-bottom: 3px solid {ACCENT};
                                  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(34,211,166,10), stop:1 rgba(34,211,166,55)); }}
-QWidget#matchView QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(28,32,40,232), stop:1 rgba(20,22,28,240));
+QWidget#matchView QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(14,36,46,215), stop:1 rgba(7,20,28,228));
                                    border: 1px solid rgba(34,211,166,95); border-radius: 16px; }}
 QWidget#matchView QFrame#playerCard {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(40,34,30,225), stop:0.6 rgba(26,28,34,225), stop:1 rgba(48,24,32,225));
                                          border: 1px solid #6a5238; border-radius: 18px; }}
@@ -457,7 +459,7 @@ QFrame#identityCard {{ background: #17191e; border: 1px solid #1f4a41; border-ra
 QFrame#identityHead {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #16584a, stop:1 #12201d);
                        border: none; border-top-left-radius: 14px; border-top-right-radius: 14px; }}
 QLabel#identityChip {{ color: #dcfff4; background: #1fa883; border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; }}
-QLabel#navBadge {{ background: {BAD}; color: white; border-radius: 9px; font-size: 10px; font-weight: 800;
+QLabel#navBadge {{ background: {ACCENT}; color: {ON_ACCENT}; border-radius: 9px; font-size: 10px; font-weight: 800;
                    min-width: 18px; max-width: 18px; min-height: 18px; max-height: 18px; qproperty-alignment: AlignCenter; }}
 QFrame#notice {{ background: #221a1e; border: 1px solid #4a2a35; border-radius: 10px; }}
 QFrame#okNotice {{ background: #15211b; border: 1px solid #24432f; border-radius: 10px; }}
@@ -484,11 +486,11 @@ QLabel#chipBad {{ color: {BAD}; background: #2a1719; border: 1px solid #4d2629; 
 QLabel#chipWarn {{ color: {MID}; background: #2a2416; border: 1px solid #4d4126; border-radius: 9px; padding: 2px 9px; font-size: 11px; font-weight: 700; }}
 QLabel#stepNumber {{ background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 14px; color: {TEXT}; font-weight: 700; qproperty-alignment: AlignCenter; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; }}
 QLabel#stepDone {{ background: {GOOD}; border-radius: 14px; color: #0f1014; font-weight: 800; qproperty-alignment: AlignCenter; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; }}
-QPushButton {{ background: {SURFACE_2}; border: 1px solid #30343c; border-radius: 8px; padding: 6px 14px; font-weight: 600; color: #dfe2e7; }}
-QPushButton:hover {{ background: #262a31; border-color: #3d424b; }}
-QPushButton:pressed {{ background: #1a1c21; }}
+QPushButton {{ background: rgba(16,40,50,210); border: 1px solid rgba(90,210,200,50); border-radius: 8px; padding: 6px 14px; font-weight: 600; color: #dfe2e7; }}
+QPushButton:hover {{ background: rgba(24,60,68,230); border-color: rgba(90,210,200,110); }}
+QPushButton:pressed {{ background: rgba(8,24,30,230); }}
 QPushButton:focus {{ border-color: {ACCENT}; }}
-QPushButton:disabled {{ background: #18191d; color: {SUBTLE}; border-color: #23252b; }}
+QPushButton:disabled {{ background: rgba(10,24,30,200); color: {SUBTLE}; border-color: rgba(90,210,200,20); }}
 QPushButton#primaryButton {{ background: {ACCENT}; color: {ON_ACCENT}; border: 0; font-weight: 800; }}
 QPushButton#primaryButton:hover {{ background: #45e3b8; }}
 QPushButton#primaryButton:disabled {{ background: #173a32; color: #5f8f82; }}
@@ -514,15 +516,15 @@ QPushButton#playButton:hover {{ background: #45e3b8; }}
 QSlider::groove:horizontal {{ height: 6px; background: rgba(255,255,255,22); border-radius: 3px; }}
 QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 3px; }}
 QSlider::handle:horizontal {{ background: #ffffff; width: 14px; height: 14px; margin: -4px 0; border-radius: 7px; }}
-QFrame#medal {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(26,33,40,235), stop:1 rgba(17,21,26,240));
-                border: 1px solid #232d36; border-radius: 14px; }}
+QFrame#medal {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(14,36,46,205), stop:1 rgba(7,20,28,220));
+                border: 1px solid rgba(70,200,190,48); border-radius: 14px; }}
 QFrame#medalOn {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(60,52,24,235), stop:1 rgba(22,22,20,240));
                   border: 1px solid rgba(242,193,78,120); border-radius: 14px; }}
 QFrame#friendChip {{ background: rgba(255,255,255,6); border: 1px solid rgba(255,255,255,18); border-radius: 12px; }}
 QFrame#friendChipOn {{ background: rgba(34,211,166,30); border: 1px solid {ACCENT}; border-radius: 12px; }}
 QPushButton#linkButton {{ background: transparent; border: 0; color: {ACCENT}; padding: 2px 0; font-weight: 600; text-align: left; }}
 QPushButton#linkButton:hover {{ color: #8af5d6; }}
-QPushButton#segment {{ background: transparent; border: 1px solid #30343c; border-radius: 7px; padding: 5px 12px; color: {MUTED}; }}
+QPushButton#segment {{ background: transparent; border: 1px solid rgba(90,210,200,45); border-radius: 7px; padding: 5px 12px; color: {MUTED}; }}
 QPushButton#segment:hover {{ border-color: #4a5560; color: {TEXT}; }}
 QPushButton#segment:checked {{ background: rgba(34,211,166,34); border-color: {ACCENT}; color: #ffffff; }}
 QCheckBox {{ color: #cfd3da; spacing: 10px; }}
@@ -537,28 +539,28 @@ QSpinBox, QDoubleSpinBox {{ background: {BG}; border: 1px solid #30343c; border-
                             selection-background-color: #1d4a40; }}
 QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {ACCENT}; }}
 QSpinBox::up-button, QDoubleSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::down-button {{ width: 16px; border: none; background: transparent; }}
-QComboBox {{ background: {SURFACE_2}; border: 1px solid #30343c; border-radius: 8px; padding: 5px 10px; min-height: 20px; }}
+QComboBox {{ background: rgba(16,40,50,210); border: 1px solid rgba(90,210,200,50); border-radius: 8px; padding: 5px 10px; min-height: 20px; }}
 QComboBox:focus {{ border-color: {ACCENT}; }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
-QComboBox QAbstractItemView {{ background: {SURFACE_2}; border: 1px solid #30343c; selection-background-color: #2f333b; padding: 4px; outline: 0; }}
-QTableWidget {{ background: transparent; alternate-background-color: #1a1c21; border: none; color: #d5d8de; outline: 0; gridline-color: transparent; }}
-QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid #202328; }}
+QComboBox QAbstractItemView {{ background: {SURFACE_2}; border: 1px solid {BORDER}; selection-background-color: #1d4a48; padding: 4px; outline: 0; }}
+QTableWidget {{ background: transparent; alternate-background-color: rgba(120,220,210,8); border: none; color: #d5d8de; outline: 0; gridline-color: transparent; }}
+QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid rgba(90,210,200,18); }}
 QTableWidget::item:selected {{ background: rgba(34,211,166,30); color: #ffffff; }}
 QHeaderView {{ background: transparent; }}
 QHeaderView::section {{ background: {SURFACE}; color: {SUBTLE}; border: none; border-bottom: 1px solid {BORDER}; padding: 8px 10px; font-size: 11px; font-weight: 700; }}
 QTableCornerButton::section {{ background: {SURFACE}; border: none; }}
 QScrollArea {{ border: none; background: transparent; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: #2c2f36; min-height: 32px; border-radius: 4px; }}
-QScrollBar::handle:vertical:hover {{ background: #3a3e46; }}
+QScrollBar::handle:vertical {{ background: #1d3a44; min-height: 32px; border-radius: 4px; }}
+QScrollBar::handle:vertical:hover {{ background: #2a5560; }}
 QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
-QScrollBar::handle:horizontal {{ background: #2c2f36; min-width: 32px; border-radius: 4px; }}
+QScrollBar::handle:horizontal {{ background: #1d3a44; min-width: 32px; border-radius: 4px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 QProgressBar {{ background: {BG}; border: 1px solid {BORDER}; border-radius: 5px; max-height: 8px; text-align: center; color: transparent; }}
 QProgressBar::chunk {{ border-radius: 4px; background: {ACCENT}; }}
-QToolTip {{ background: #24272e; color: {TEXT}; border: 1px solid #3a3e46; padding: 6px; }}
-QMenu {{ background: {SURFACE_2}; border: 1px solid #30343c; padding: 4px; }}
+QToolTip {{ background: #0f2630; color: {TEXT}; border: 1px solid #23505a; padding: 6px; }}
+QMenu {{ background: {SURFACE_2}; border: 1px solid {BORDER}; padding: 4px; }}
 QMenu::item {{ padding: 6px 18px; border-radius: 5px; }}
-QMenu::item:selected {{ background: #2f333b; }}
+QMenu::item:selected {{ background: #1d4a48; }}
 """

@@ -57,7 +57,7 @@ class PercentileBar(Growing, QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(0, 2, self.width(), 6)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#25282f"))
+        painter.setBrush(QColor(255, 255, 255, 24))
         painter.drawRoundedRect(rect, 3, 3)
         if self.score is not None:
             fill = QRectF(rect.left(), rect.top(), max(4.0, rect.width() * self.score / 100 * self.grow), rect.height())

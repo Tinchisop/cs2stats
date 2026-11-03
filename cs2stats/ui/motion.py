@@ -28,6 +28,10 @@ class Reveal(QGraphicsEffect):
     def set_progress(self, value: float) -> None:
         self.progress = value
         self.update()
+        widget = self.parent()
+        if isinstance(widget, QWidget) and widget.property("glow") and widget.parentWidget() is not None:
+            # El halo se pinta en el lienzo de atrás y sobresale de la tarjeta: hay que repintar ese borde también.
+            widget.parentWidget().update(widget.geometry().adjusted(-18, -18, 18, 18 + RISE))
 
     def draw(self, painter: QPainter) -> None:  # noqa: D401
         painter.save()

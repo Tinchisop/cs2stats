@@ -60,10 +60,11 @@ class Sparkline(Growing, QWidget):
 
     grow_ms = 1200
 
-    def __init__(self, values: list, color: str = ACCENT, width: int = 96, height: int = 34, parent=None):
+    def __init__(self, values: list, color: str = ACCENT, width: int = 96, height: int = 34, parent=None, glow: bool = False):
         super().__init__(parent)
         self.values = [v for v in values if v is not None]
         self.color = color
+        self.glow = glow
         # Se achica (hasta un mínimo) si la ventana es angosta, para no empujar el resto.
         self.setFixedHeight(height)
         self.setMinimumWidth(min(width, 34))
@@ -94,7 +95,14 @@ class Sparkline(Growing, QWidget):
         top.setAlpha(0)
         gradient.setColorAt(1, top)
         painter.fillPath(shade, gradient)
-        painter.setPen(QPen(color, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        if self.glow:
+            # Trazos anchos y tenues debajo de la línea: parece que la línea brilla.
+            for width, alpha in ((9, 22), (5, 45)):
+                soft = QColor(color)
+                soft.setAlpha(alpha)
+                painter.setPen(QPen(soft, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                painter.drawPath(path)
+        painter.setPen(QPen(color, 2.0 if self.glow else 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
         painter.drawPath(path)
         if self.grow >= 0.97:
             end = points[-1]
@@ -154,9 +162,23 @@ class RadarChart(Growing, Hovering, QWidget):
             return
         center, radius = self._geometry()
         n = len(self.axes)
+        # Resplandor y polvo de luz alrededor, como un holograma.
+        aura = QRadialGradient(center, radius * 1.35)
+        aura.setColorAt(0, QColor(34, 211, 166, 46))
+        aura.setColorAt(0.6, QColor(34, 211, 166, 14))
+        aura.setColorAt(1, QColor(34, 211, 166, 0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(aura)
+        painter.drawEllipse(center, radius * 1.35, radius * 1.35)
+        for index in range(36):
+            angle = index * 2.399   # ángulo áureo: quedan repartidas sin verse en fila
+            reach = radius * (0.35 + 0.85 * ((index * 0.618) % 1))
+            dot = QPointF(center.x() + reach * math.cos(angle), center.y() + reach * math.sin(angle))
+            painter.setBrush(QColor(150, 255, 230, int(40 + 80 * ((index * 0.37) % 1) * self.grow)))
+            painter.drawEllipse(dot, 0.7 + (index % 3) * 0.4, 0.7 + (index % 3) * 0.4)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         for ring in (0.25, 0.5, 0.75, 1.0):
-            painter.setPen(QPen(QColor(255, 255, 255, 36 if ring == 1.0 else 16), 1))
+            painter.setPen(QPen(QColor(110, 240, 210, 60 if ring == 1.0 else 22), 1))
             painter.drawPath(self._polygon(center, radius, [ring] * n))
         for index in range(n):
             painter.drawLine(center, self._point(center, radius, index, 1.0))
@@ -287,7 +309,7 @@ class MatchCarousel(Growing, Hovering, QWidget):
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, t("Todavía no hay partidas con demo"))
             return
         painter.save()
-        painter.setClipRect(track.adjusted(-2, -4, 2, 4))
+        painter.setClipRect(track.adjusted(-6, -6, 6, 6))
         n = len(self.items)
         for index, item in enumerate(self.items):
             x = track.left() + index * (self.CARD_W + self.GAP) - self.offset
@@ -313,32 +335,41 @@ class MatchCarousel(Growing, Hovering, QWidget):
         clip.addRoundedRect(rect, 12, 12)
         painter.save()
         painter.setClipPath(clip)
-        painter.fillRect(rect, QColor("#141b21"))
-        picture = map_picture(item["map"], int(rect.width() * 0.55), int(rect.height()))
+        painter.fillRect(rect, QColor("#0b1820"))
+        # La foto del mapa ocupa toda la tarjeta; se oscurece a la izquierda y abajo para que se lean los números.
+        picture = map_picture(item["map"], int(rect.width()), int(rect.height()))
         if not picture.isNull():
-            image_rect = QRectF(rect.right() - rect.width() * 0.55, rect.top(), rect.width() * 0.55, rect.height())
-            painter.setOpacity(painter.opacity() * (0.75 + 0.25 * hover))
-            painter.drawPixmap(image_rect, picture, QRectF(picture.rect()))
-            painter.setOpacity(painter.opacity() / (0.75 + 0.25 * hover))
-            fade = QLinearGradient(image_rect.topLeft(), image_rect.topRight())
-            fade.setColorAt(0, QColor("#141b21"))
-            fade.setColorAt(0.55, QColor(20, 27, 33, 120))
-            fade.setColorAt(1, QColor(20, 27, 33, 40))
-            painter.fillRect(image_rect, fade)
+            painter.setOpacity(painter.opacity() * (0.8 + 0.2 * hover))
+            painter.drawPixmap(rect, picture, QRectF(picture.rect()))
+            painter.setOpacity(painter.opacity() / (0.8 + 0.2 * hover))
+            fade = QLinearGradient(rect.topLeft(), rect.topRight())
+            fade.setColorAt(0, QColor(8, 20, 28, 215))
+            fade.setColorAt(0.5, QColor(8, 20, 28, 130))
+            fade.setColorAt(1, QColor(8, 20, 28, 40))
+            painter.fillRect(rect, fade)
+            floor = QLinearGradient(rect.bottomLeft(), rect.topLeft())
+            floor.setColorAt(0, QColor(4, 12, 18, 200))
+            floor.setColorAt(0.45, QColor(4, 12, 18, 0))
+            painter.fillRect(rect, floor)
         result = item.get("result")
         tone = QColor(GOOD if result == "W" else BAD if result == "L" else MID)
         wash = QLinearGradient(rect.bottomLeft(), rect.topLeft())
-        tone.setAlpha(40 + int(30 * hover))
+        tone.setAlpha(34 + int(30 * hover))
         wash.setColorAt(0, tone)
         tone.setAlpha(0)
         wash.setColorAt(0.6, tone)
         painter.fillRect(rect, wash)
         painter.restore()
-        border = QColor(ACCENT) if hover > 0.05 else QColor(255, 255, 255, 30)
-        if hover > 0.05:
-            border.setAlpha(int(90 + 140 * hover))
-        painter.setPen(QPen(border, 1.2 + hover))
+        # Borde del color del resultado (verde ganada, rojo perdida) con un halo que se enciende al pasar el mouse.
+        edge = QColor(GOOD if result == "W" else BAD if result == "L" else MID)
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        for step in range(1, 6):
+            soft = QColor(edge)
+            soft.setAlpha(int((26 + 40 * hover) * (1 - step / 6) ** 2))
+            painter.setPen(QPen(soft, 1.6))
+            painter.drawRoundedRect(rect.adjusted(-step, -step, step, step), 12 + step, 12 + step)
+        edge.setAlpha(int(150 + 105 * hover))
+        painter.setPen(QPen(edge, 1.3 + hover * 0.7))
         painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), 12, 12)
         pad = 12
         painter.setFont(QFont("Segoe UI Variable Display", 13, QFont.Weight.Bold))
@@ -353,8 +384,10 @@ class MatchCarousel(Growing, Hovering, QWidget):
         chip = QRectF(rect.left() + pad + 50, rect.top() + 33, 56, 20)
         color = QColor(GOOD if result == "W" else BAD if result == "L" else MID)
         back = QColor(color)
-        back.setAlpha(46)
+        back.setAlpha(60)
         painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(6, 16, 22, 215))   # base oscura: sobre la foto del mapa el marcador se perdía
+        painter.drawRoundedRect(chip, 5, 5)
         painter.setBrush(back)
         painter.drawRoundedRect(chip, 5, 5)
         painter.setPen(color)

@@ -18,6 +18,7 @@ from ..sessions import analyze_sessions, tilt_warning
 from ..insights import Insight, analyze
 from ..progress import premier_forecast
 from ..metrics import SOURCE_NAMES, by_key, map_label, summarize, weapon_label
+from .backdrop import GlowLayer, set_glow
 from .charts import BarList, ColumnChart, PercentileBar, SideCompare, TrendChart
 from .heatmap import HeatMap, hot_zones
 from .hud import CoachBot, MatchCarousel, RadarChart, Sparkline, TierProgress, map_picture, tier_progress
@@ -53,6 +54,7 @@ def scroll_page() -> tuple[QScrollArea, QVBoxLayout]:
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     canvas = QWidget()
     canvas.setObjectName("canvas")
+    GlowLayer(canvas)
     layout = QVBoxLayout(canvas)
     layout.setContentsMargins(28, 6, 28, 28)
     layout.setSpacing(16)
@@ -191,17 +193,24 @@ def faceit_cell(entry: dict, change: int | None = None) -> QWidget:
     return holder
 
 
+def comp_tone(comp) -> str:
+    """"good", "bad" o "" (parejo con tu rango o sin referencia)."""
+    if comp is None or comp.delta is None or comp.average is None:
+        return ""
+    if abs(comp.delta) < (0.02 if comp.metric.kind in ("pct", "num2") else 1.5):
+        return ""
+    return "good" if (comp.delta > 0 if comp.metric.higher_better else comp.delta < 0) else "bad"
+
+
 def delta_chip(comp, compact: bool = False) -> QLabel:
     """'+12 %' verde o rojo según si es bueno, con el percentil en el tooltip."""
     if comp is None or comp.delta is None or comp.average is None:
         return chip(t("sin referencia"), "chip")
-    better = comp.delta > 0 if comp.metric.higher_better else comp.delta < 0
     if comp.metric.kind == "pct":
         text = f"{comp.delta * 100:+.0f} pts"
     else:
         text = ("+" if comp.delta >= 0 else "") + fmt_metric(comp.delta, comp.metric.kind)
-    near = abs(comp.delta) < (0.02 if comp.metric.kind in ("pct", "num2") else 1.5)
-    kind = "chip" if near else "chipGood" if better else "chipBad"
+    kind = {"good": "chipGood", "bad": "chipBad"}.get(comp_tone(comp), "chip")
     tip = t('Promedio de referencia: {0} ({1} registros)').format(fmt_metric(comp.average, comp.metric.kind), comp.samples)
     return chip(text, kind, tip)
 
@@ -248,6 +257,12 @@ class StatTile(QFrame):
     def fill(self, title: str, value, kind: str, color: str, comp, note: str = "", spark: list | None = None) -> None:
         layout = self.layout_
         clear(layout)
+        # Borde y halo del color de cómo te va contra tu rango, como en un tablero de juego.
+        tone = comp_tone(comp)
+        self.setProperty("tone", tone)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        set_glow(self, GOOD if tone == "good" else BAD if tone == "bad" else None, 0.8)
         top = QHBoxLayout()
         top.addWidget(label(title.upper(), "cardTitle"))
         top.addStretch(1)
@@ -259,7 +274,7 @@ class StatTile(QFrame):
         middle.addWidget(big)
         middle.addStretch(1)
         if spark and len([v for v in spark if v is not None]) >= 2:
-            middle.addWidget(Sparkline(spark, color, 78, 34), 1, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+            middle.addWidget(Sparkline(spark, color, 78, 34, glow=True), 1, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
         layout.addLayout(middle)
         reference = fmt_metric(comp.average, comp.metric.kind) if comp and comp.average is not None else "—"
         layout.addWidget(label(t('Tu rango: {0}').format(reference), "smallMuted"))
@@ -316,7 +331,7 @@ class ProfilePage(Page):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.metric = "rating"
+        self.chart_metric = "rating"
         self.view = None
 
     def update_view(self, view: dict) -> None:
@@ -382,7 +397,7 @@ class ProfilePage(Page):
             seg = QPushButton(BY_KEY[key].label)
             seg.setObjectName("segment")
             seg.setCheckable(True)
-            seg.setChecked(key == self.metric)
+            seg.setChecked(key == self.chart_metric)
             seg.setCursor(Qt.CursorShape.PointingHandCursor)
             seg.clicked.connect(lambda _=False, k=key: self._pick(k))
             group.addButton(seg)
@@ -438,6 +453,8 @@ class ProfilePage(Page):
 
     def _header(self, view: dict) -> QWidget:
         box = panel("heroCard")
+        box.setProperty("glowRadius", 18)
+        set_glow(box, ACCENT, 1.0)
         outer = QVBoxLayout(box)
         outer.setContentsMargins(22, 18, 22, 16)
         outer.setSpacing(14)
@@ -534,7 +551,7 @@ class ProfilePage(Page):
             big = CountUp(value, fmt, "heroValue")
             big.setStyleSheet(f"color: {color};")
             line_row.addWidget(big)
-            line_row.addWidget(Sparkline(spark, ACCENT, 74, 30), 1, Qt.AlignmentFlag.AlignVCenter)
+            line_row.addWidget(Sparkline(spark, ACCENT, 140, 38, glow=True), 1, Qt.AlignmentFlag.AlignVCenter)
             col.addLayout(line_row)
             stats.addLayout(col, 1)
         outer.addLayout(stats)
@@ -687,7 +704,9 @@ class ProfilePage(Page):
         _strong, weak = view["highlights"]
         ranked = [c for c in view["comparisons"] if c.score is not None and c.average is not None]
         ranked.sort(key=lambda c: c.score)
-        picks = (weak or ranked)[:3]
+        # Primero tus puntos flojos; si son menos de tres, se completa con lo que peor te sale.
+        taken = {c.metric.key for c in weak}
+        picks = (list(weak) + [c for c in ranked if c.metric.key not in taken])[:3]
         recent = view["matches"][-5:]
         if not picks:
             layout.addWidget(label(t("Todavía no hay datos para armar desafíos."), "muted", wrap=True))
@@ -700,6 +719,9 @@ class ProfilePage(Page):
                     hits += 1
             done = hits >= 3
             frame = panel("challengeDone" if done else "challenge")
+            if done:
+                frame.setProperty("glowRadius", 10)
+                set_glow(frame, GOOD, 0.9)
             col = QVBoxLayout(frame)
             col.setContentsMargins(12, 8, 12, 10)
             col.setSpacing(5)
@@ -707,7 +729,11 @@ class ProfilePage(Page):
             goal = (t("{0}: más de {1}").format(metric.label, fmt_metric(comp.average, metric.kind)) if metric.higher_better
                     else t("{0}: menos de {1}").format(metric.label, fmt_metric(comp.average, metric.kind)))
             top.addWidget(label(goal, "body", wrap=True), 1)
-            count = label(f"{hits}/3" if not done else "✓", "midValue")
+            if hits:
+                tick = QLabel()
+                tick.setPixmap(icon("check", GOOD if done else ACCENT_SOFT, 16).pixmap(QSize(16, 16)))
+                top.addWidget(tick)
+            count = label(f"{min(hits, 3)}/3", "midValue")
             count.setStyleSheet(f"color: {GOOD if done else TEXT};")
             top.addWidget(count)
             col.addLayout(top)
@@ -753,12 +779,12 @@ class ProfilePage(Page):
         return frame
 
     def _pick(self, key: str) -> None:
-        self.metric = key
+        self.chart_metric = key
         self._draw_chart()
 
     def _draw_chart(self) -> None:
         view = self.view
-        metric = BY_KEY[self.metric]
+        metric = BY_KEY[self.chart_metric]
         scale = 100 if metric.kind == "pct" else 1
         points = []
         for m in view["matches"][-40:]:

@@ -36,6 +36,7 @@ from ..recorder import RecorderError, cs2_running, ffmpeg_path, launch_practice,
 from .clips_page import ClipsPage
 from .connect import ConnectPage, DemosPage, LoginDialog
 from .match import MatchView
+from .backdrop import Backdrop
 from .hud import CoachBot
 from .motion import cascade, reveal
 from .nades_page import NadesPage
@@ -307,7 +308,7 @@ class MainWindow(QMainWindow):
         self.resize(1400, 920)
         self.setMinimumSize(1150, 740)
         self.setStyleSheet(STYLE)
-        root = QWidget()
+        root = Backdrop()
         root.setObjectName("root")
         self.setCentralWidget(root)
         outer = QHBoxLayout(root)
@@ -480,7 +481,7 @@ class MainWindow(QMainWindow):
             self.nav[key] = btn
             layout.addWidget(btn)
             if key == "consejos":
-                # Globito rojo con la cantidad de puntos flojos, como en la referencia.
+                # Globito turquesa con la cantidad de puntos flojos, como en la referencia.
                 inner = QHBoxLayout(btn)
                 inner.setContentsMargins(0, 0, 12, 0)
                 inner.addStretch(1)
@@ -492,7 +493,7 @@ class MainWindow(QMainWindow):
         coach_row = QHBoxLayout(self.coach)
         coach_row.setContentsMargins(10, 8, 10, 8)
         coach_row.setSpacing(8)
-        coach_row.addWidget(CoachBot(42))
+        coach_row.addWidget(CoachBot(52))
         coach_text = QVBoxLayout()
         coach_text.setSpacing(4)
         coach_text.addWidget(label(t("Tu entrenador"), "smallMuted"))
