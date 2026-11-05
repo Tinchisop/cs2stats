@@ -81,7 +81,9 @@ def bundled_clips_dir() -> Path | None:
     """Clips que vienen con la descarga de la app (carpeta clips junto al .exe): así no hace falta grabarlos."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent / "clips"
-    return None
+    # Sin compilar (cuando Smart App Control bloquea el .exe): usa los clips de la última build.
+    built = Path(__file__).resolve().parent.parent / "dist" / "CS2Stats" / "clips"
+    return built if built.is_dir() else None
 
 
 def _clip_file(name: str) -> Path:

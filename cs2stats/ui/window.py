@@ -64,7 +64,8 @@ ES_RESTART = "El idioma cambia la próxima vez que abras la app."
 def launch_command() -> str:
     if getattr(sys, "frozen", False):
         return f'"{sys.executable}" --bandeja'
-    return f'"{Path(sys.executable).with_name("pythonw.exe")}" -m cs2stats --bandeja'
+    entry = Path(__file__).resolve().parents[2] / "desktop_entry.py"
+    return f'"{Path(sys.executable).with_name("pythonw.exe")}" "{entry}" --bandeja'
 
 
 def startup_enabled() -> bool:
