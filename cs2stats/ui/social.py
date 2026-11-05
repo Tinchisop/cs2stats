@@ -18,6 +18,7 @@ from .charts import TrendChart
 from .hud import TierProgress
 from .motion import CountUp, Growing, Hovering, hover_glow, stagger
 from .pages import Page, card, chip, empty_state, short_date
+from .responsive import StackRow
 from .theme import (ACCENT, BAD, CT_COLOR, GOOD, MID, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num, fmt_pct, icon,
                     label, panel, score_color)
 from .visual import Avatar
@@ -248,8 +249,7 @@ class FriendsPage(Page):
         mine = combine([p["stats"] for m in view["all_matches"] for p in m.get("scoreboard") or [] if p.get("me") and p.get("stats")])
         roles = team_roles(found, mine, view["name"] or t("Vos"))
         box, layout = card(t("Roles del grupo"), t("Vos y los compañeros con los que más jugás"))
-        row = QHBoxLayout()
-        row.setSpacing(16)
+        row = StackRow(16)
         columns = (
             ("entry", t("ENTRY ASSISTANT"), t("Abre los sitios con flashes que ciegan y cambia las kills de los que entran."),
              lambda s: t("{0} flashes efectivas y {1} cambios por ronda").format(fmt_num(s.get("flashes_pr"), 2),
@@ -277,7 +277,7 @@ class FriendsPage(Page):
                 col.addWidget(TierProgress(person[score_key] / best if best else 0, ACCENT if rank == 0 else CT_COLOR))
             col.addStretch(1)
             row.addLayout(col, 1)
-        layout.addLayout(row)
+        layout.addWidget(row)
         return box
 
     def _match_row(self, m: dict, friend: dict) -> QWidget:
@@ -538,7 +538,13 @@ class AchievementsPage(Page):
         forecast = premier_forecast(view["all_matches"])
         if not forecast:
             return None
-        box, layout = card(t("Pronóstico de Premier"), t("Si seguís como en tus últimas {0} partidas").format(forecast.games))
+        note = t("Si seguís como en tus últimas {0} partidas").format(forecast.games)
+        if forecast.skipped:
+            note += " · " + t("sin contar {0} fuera de lo común").format(forecast.skipped)
+        box, layout = card(t("Pronóstico de Premier"), note)
+        if forecast.skipped:
+            box.setToolTip(t("Las partidas que sumaron o restaron más del doble de lo normal (por ejemplo, una rendición "
+                             "que resta 1000) no cuentan para el promedio."))
         row = QHBoxLayout()
         row.setSpacing(24)
         for title, value, color in ((t("AHORA"), forecast.current, TEXT),
@@ -568,6 +574,8 @@ class AchievementsPage(Page):
                         for m in premier], decimals=0, color=CT_COLOR, forecast=forecast.points,
                        band=(forecast.low, forecast.high))
         layout.addWidget(chart)
-        layout.addWidget(label(t("Es una estimación con tu promedio reciente: cambia con cada partida."), "smallMuted"))
+        layout.addWidget(label(t("Es una estimación con tu promedio reciente: cambia con cada partida.") +
+                               (" " + t("Las rendiciones y los abandonos no cuentan para el promedio.") if forecast.skipped
+                                else ""), "smallMuted", wrap=True))
         return box
 

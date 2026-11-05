@@ -19,15 +19,15 @@ Everything runs on your PC with official Valve tools. It never reads or touches 
 * **Tips** written from your own numbers, with how confident each one is.
 * **Lineups:** smokes, molotovs, flashes and HEs for Mirage, Dust II, Inferno, Ancient, Anubis, Nuke and Cache, each one tested in CS2. Every lineup has a 60 FPS first-person clip recorded in game: you walk to the spot, aim, throw and see how it lands, with a marker for each step. It also has step by step instructions and how many times it was thrown in your matches. Click the clip to watch it full screen.
 * **Steam message after every match:** your secondary account sends you a chat message, like a friend, with your best moments (multi-kills, clutches, ADR records).
-* **2D replay of every match:** all 10 players on the map, round by round, with a timeline, speed control, grenades, the bomb, shots and kills, to review executes, rotations and retakes.
+* **2D replay of every match:** all 10 players on the game's own radar, round by round, with a timeline, speed control, grenades, the bomb, shots and kills, to review executes, rotations and retakes.
 * **Automatic plays:** the app finds your aces, 4Ks, 3Ks and won clutches, and also your mistakes (dying without firing, flashes that blinded 2 or more teammates). Each one plays as a short clip of the replay or saves as an MP4 or GIF, without opening the game or downloading the demo again.
 * **Open in CS2:** every play and every replay moment opens the real demo in the game, at that round and second, with the camera on your player. CS2 opens in replay mode (`-insecure`); to play online again, close it and open it normally. If CS2 is already open, the app leaves it alone and gives you the commands to paste in the console.
 * **Sessions:** how much you win by match of the session, after a win or a loss, and by time of day. If the difference is large enough to trust, it tells you from which match you should stop; if not, it draws no conclusions.
-* **Heat map** of where you kill and where you die on each map, with the zones that repeat the most. **Early deaths** shows where you die in the first 30 seconds, per side (for example: "On Mirage as T, 35% of your early deaths happen at Top Mid").
+* **Heat map** of where you kill and where you die on each map, drawn over the game's radar, with the zones that repeat the most. **Early deaths** shows where you die in the first 30 seconds, per side (for example: "On Mirage as T, 35% of your early deaths happen at Top Mid").
 * **You and your friends:** head to head against the teammates you play with the most, in the same matches, plus your **synergy** with each one: how often you win together and apart, their effective flashes and trade kills. It also shows who in the group is the Entry Assistant and who is the Lurk / Saver.
 * **Pre-match assistant:** add your teammates and opponents (your Steam party is detected automatically, or paste profiles, names or the `status` output) and the app suggests which maps to pick and ban, and flags dangerous opponents, AWPers and entry fraggers. With a FACEIT room and a free FACEIT API key it adds all 10 players' FACEIT numbers.
 * **Training:** 3 new challenges every Monday built from your weak spots (trade kills on your map, ADR over consecutive matches, matches without blinding teammates…) and free CS2 Workshop maps with a concrete routine for each one (Aim Botz, Recoil Master, Yprac, prefires).
-* **Achievements and goals:** 20 medals (ace, clutches, streaks, Premier colors…), your own goals with progress bars and a Premier forecast for your next 10 matches.
+* **Achievements and goals:** 20 medals (ace, clutches, streaks, Premier colors…), your own goals with progress bars and a Premier forecast for your next 10 matches (leaving out surrenders and abandons, which can take away 1000 at once).
 * **Map music:** each map's song, taken from your CS2 files, plays when you open a match or tap a map, plus a map radio with volume control.
 * **Spanish and English.** Pick the language at the bottom of the sidebar.
 
@@ -80,7 +80,7 @@ Everything is stored in `%LOCALAPPDATA%\CS2Stats`: `historial.db` (matches, roun
 
 ## Credits
 
-Lineup positions come from [csnades.gg](https://csnades.gg) and from throws that several players repeated in real matches; every lineup was thrown in CS2 and only the ones that land where they should were kept. Map images and icons are read from your local CS2 install. CS2 Stats is not affiliated with Valve.
+Lineup positions come from [csnades.gg](https://csnades.gg) and from throws that several players repeated in real matches; every lineup was thrown in CS2 and only the ones that land where they should were kept. Map images, icons and radars are read from your local CS2 install. CS2 Stats is not affiliated with Valve.
 
 ## License
 

@@ -26,7 +26,7 @@ from ..resumen import match_message
 from ..sync import (URGENT, build_replay, reload_saved_history, send_summary, steam_ready, sync_history, sync_if_playing,
                     sync_steam)
 from ..assets import (MAP_MUSIC, avatar_path, download_avatar, download_player_avatars, extract_game_assets,
-                      extract_map_music, extract_overviews, map_music)
+                      extract_map_music, extract_radars, map_music)
 from ..demoview import DemoViewError, open_moment
 from ..faceit import elo_changes, level_at, link_demo_changes, sync_faceit
 from ..prematch import LobbyError, collect, detect_party
@@ -924,7 +924,7 @@ class MainWindow(QMainWindow):
         def task(_say):
             extract_game_assets()
             extract_map_music()
-            extract_overviews()
+            extract_radars()
             if old_avatar:
                 download_avatar(steamid, key)
             download_player_avatars(others, key)

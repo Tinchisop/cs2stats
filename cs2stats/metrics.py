@@ -11,7 +11,8 @@ from typing import Iterable
 MAP_NAMES = {
     "de_mirage": t("Mirage"), "de_inferno": t("Inferno"), "de_nuke": t("Nuke"), "de_ancient": t("Ancient"),
     "de_anubis": t("Anubis"), "de_dust2": t("Dust II"), "de_train": t("Train"), "de_overpass": t("Overpass"),
-    "de_vertigo": t("Vertigo"), "de_cache": t("Cache"), "de_italy": t("Italy"), "de_office": t("Office"),
+    "de_vertigo": t("Vertigo"), "de_cache": t("Cache"), "cs_italy": t("Italy"), "cs_office": t("Office"),
+    "de_italy": t("Italy"), "de_office": t("Office"),
 }
 SOURCE_NAMES = {"premier": t("Premier"), "faceit": t("FACEIT"), "competitivo": t("Competitivo"),
                 "wingman": t("Wingman"), "valve": t("Valve"), "otro": t("Otra")}
@@ -28,7 +29,7 @@ WEAPON_NAMES = {
 
 
 def map_label(raw: str) -> str:
-    return MAP_NAMES.get(raw, raw.removeprefix("de_").replace("_", " ").title())
+    return MAP_NAMES.get(raw, raw.removeprefix("de_").removeprefix("cs_").removeprefix("ar_").replace("_", " ").title())
 
 
 def weapon_label(raw: str) -> str:

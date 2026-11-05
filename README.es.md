@@ -19,15 +19,15 @@ Todo corre en tu PC con herramientas oficiales de Valve. Nunca lee ni toca la me
 * **Consejos** armados con tus números, con qué tan confiable es cada uno.
 * **Latas:** smokes, molotovs, flashes y HE de Mirage, Dust II, Inferno, Ancient, Anubis, Nuke y Cache, cada una probada en CS2, con el nombre del call (Ventana, Jungla, Cabezinha, CT, Triple, Caja de fuego, L...). Cada lata tiene un clip de 60 cuadros por segundo grabado en el juego en primera persona: caminás hasta el lugar, apuntás, tirás y ves cómo cae, con la señal de cada paso. También trae los pasos y cuántas veces se tiró en tus partidas. Con un clic se ve en pantalla completa.
 * **Mensaje de Steam al terminar cada partida:** tu cuenta secundaria te escribe por el chat, como un amigo, con lo mejor de tu partida (multikills, clutches, récords de ADR).
-* **Repetición 2D de cada partida:** los 10 jugadores sobre el mapa, ronda por ronda, con barra de tiempo, velocidad, granadas, bomba, disparos y kills, para revisar ejecuciones, rotaciones y retakes.
+* **Repetición 2D de cada partida:** los 10 jugadores sobre el radar del juego, ronda por ronda, con barra de tiempo, velocidad, granadas, bomba, disparos y kills, para revisar ejecuciones, rotaciones y retakes.
 * **Jugadas automáticas:** la app busca tus ases, 4K, 3K y clutches ganados, y también tus errores (morir sin disparar, flashes que cegaron a 2 o más compañeros). Cada una se mira como un clip corto de la repetición o se guarda como MP4 o GIF, sin abrir el juego ni bajar la demo de nuevo.
 * **Abrir en CS2:** cada jugada y cada momento de la repetición abre la demo real en el juego, en esa ronda y ese segundo, con la cámara en tu jugador. CS2 se abre en modo de repeticiones (`-insecure`); para volver a jugar online, lo cerrás y lo abrís normal. Si CS2 ya está abierto, la app no lo toca: te da los comandos para pegar en la consola.
 * **Sesiones:** cuánto ganás según la partida de la sesión, si venís de ganar o perder y el horario. Si la diferencia alcanza para confiar en ella, te dice desde qué partida te conviene cortar; si no, no saca conclusiones.
-* **Mapa de calor** de dónde matás y dónde morís en cada mapa, con las zonas que más se repiten. Con **muertes tempranas** ves dónde caés en los primeros 30 segundos, por lado (por ejemplo: "En Mirage como T el 35 % de tus muertes tempranas son en Top Mid").
+* **Mapa de calor** de dónde matás y dónde morís en cada mapa, sobre el radar del juego, con las zonas que más se repiten. Con **muertes tempranas** ves dónde caés en los primeros 30 segundos, por lado (por ejemplo: "En Mirage como T el 35 % de tus muertes tempranas son en Top Mid").
 * **Vos y tus amigos:** cara a cara con los compañeros con los que más jugás, en las mismas partidas, y la **sinergia** con cada uno: cuánto ganás juntos y separados, sus flashes efectivas y kills de cambio. Además, quién del grupo es el Entry Assistant y quién el Lurk / Saver.
 * **Asistente pre-partida:** cargá a tus compañeros y a los rivales (tu grupo de Steam se detecta solo, o pegás perfiles, nombres o la salida de `status`) y la app sugiere qué mapas pickear y banear, y marca a los rivales peligrosos, AWPers y entry fraggers. Con una sala de FACEIT y una clave gratis de la API de FACEIT suma los números de FACEIT de los 10.
 * **Entrenamiento:** 3 retos nuevos cada lunes armados con tus puntos flojos (kills de cambio en tu mapa, ADR en partidas seguidas, partidas sin cegar compañeros…) y mapas gratis del Workshop de CS2 con una rutina concreta para cada cosa (Aim Botz, Recoil Master, Yprac, prefires).
-* **Logros y metas:** 20 medallas (as, clutches, rachas, colores de Premier…), metas propias con barra de progreso y un pronóstico de Premier para tus próximas 10 partidas.
+* **Logros y metas:** 20 medallas (as, clutches, rachas, colores de Premier…), metas propias con barra de progreso y un pronóstico de Premier para tus próximas 10 partidas (sin contar rendiciones ni abandonos, que pueden restar 1000 de una).
 * **Música del mapa:** la canción de cada mapa, sacada de tus archivos de CS2, suena al abrir una partida o tocar un mapa, y hay una radio de mapas con control de volumen.
 * **Español e inglés.** El idioma se elige abajo en la barra lateral.
 
@@ -68,7 +68,7 @@ En `%LOCALAPPDATA%\CS2Stats`: `historial.db` (partidas, rondas, armas y las repe
 
 ## Créditos
 
-Las posiciones de las latas salen de [csnades.gg](https://csnades.gg) y de tiros que varios jugadores repitieron en partidas reales; cada una se tiró en CS2 y solo quedaron las que caen donde tienen que caer. Las fotos e íconos de los mapas se leen de tu CS2 instalado. CS2 Stats no está afiliado a Valve.
+Las posiciones de las latas salen de [csnades.gg](https://csnades.gg) y de tiros que varios jugadores repitieron en partidas reales; cada una se tiró en CS2 y solo quedaron las que caen donde tienen que caer. Las fotos, los íconos y los radares de los mapas se leen de tu CS2 instalado. CS2 Stats no está afiliado a Valve.
 
 ## Licencia
 

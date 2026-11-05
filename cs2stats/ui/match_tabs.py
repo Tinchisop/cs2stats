@@ -16,6 +16,7 @@ from .detail_charts import DivergingBars, Gauge, MarkerBar, RoundImpact, ShareBa
 from .match_parts import (NAME_WIDTH, cell, color_legend, header_row, missing_note, player_face, player_row,
                           team_rows, tone_color)
 from .pages import card, chip, clear
+from .responsive import StackRow
 from .theme import (ACCENT, BAD, CT_COLOR, GOOD, MID, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num, fmt_pct, icon, label,
                     panel, rating_color)
 from .visual import Avatar, svg_pixmap
@@ -141,8 +142,7 @@ def your_match_tab(m: dict, history: list[dict]) -> QWidget:
     nums = numbers(m)
     mine = nums.get(me, {})
     allies = [nums[str(p["steamid"])] for p in m["scoreboard"] if p["ally"]]
-    row = QHBoxLayout()
-    row.setSpacing(16)
+    row = StackRow(16)
 
     picks = []
     for key, name, category, fmt, worst, best in TOP_CANDIDATES:
@@ -250,7 +250,7 @@ def your_match_tab(m: dict, history: list[dict]) -> QWidget:
         line_layout.addWidget(avg)
         layout.addWidget(line)
     row.addWidget(box, 4, Qt.AlignmentFlag.AlignTop)
-    outer.addLayout(row)
+    outer.addWidget(row)
     outer.addStretch(1)
     return widget
 
@@ -597,8 +597,7 @@ class ImpactTab(QWidget):
         clear(self.content)
         n = player_numbers(self.m, p["steamid"])
         impact = impact_rating((self.m["detail"].get("impact") or {}).get(str(p["steamid"])))
-        row = QHBoxLayout()
-        row.setSpacing(16)
+        row = StackRow(16)
         box, layout = card(t("Impacto de {0}").format(p["name"]) if not p.get("me") else t("Tu impacto"))
         gauges = QHBoxLayout()
         for key, title, color in (("impact", t("Impacto"), ACCENT), ("impact_t", t("Como T"), T_COLOR), ("impact_ct", t("Como CT"), CT_COLOR)):
@@ -619,7 +618,7 @@ class ImpactTab(QWidget):
         box, layout = card(t("Impacto ganado y perdido"), t("Suma de la partida por tipo de jugada"))
         layout.addWidget(DivergingBars([(name, impact["cats"].get(key, 0.0), help_text) for key, name, help_text in CATEGORIES]))
         row.addWidget(box, 6)
-        self.content.addLayout(row)
+        self.content.addWidget(row)
         winners = {r["n"]: r["side"] if r["won"] else ("CT" if r["side"] == "T" else "T") for r in self.m["rounds"]}
         rounds = [{"n": number, "value": value, "side": impact["sides"].get(number, ""),
                    "won": winners.get(number) == impact["sides"].get(number)} for number, value in sorted(impact["rounds"].items())]

@@ -5,7 +5,7 @@ Duraciones cortas y con frenado al final (OutCubic): la animación acompaña, no
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QEvent, QObject, QTimer, QVariantAnimation
+from PySide6.QtCore import QEasingCurve, QEvent, QObject, QPoint, QRect, QTimer, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QGraphicsEffect, QLabel, QWidget
 
@@ -30,8 +30,15 @@ class Reveal(QGraphicsEffect):
         self.update()
         widget = self.parent()
         if isinstance(widget, QWidget) and widget.property("glow") and widget.parentWidget() is not None:
-            # El halo se pinta en el lienzo de atrás y sobresale de la tarjeta: hay que repintar ese borde también.
-            widget.parentWidget().update(widget.geometry().adjusted(-18, -18, 18, 18 + RISE))
+            # El halo se pinta en el lienzo de la página y sobresale de la tarjeta: hay que repintar ese borde también
+            # (en el lienzo, aunque la tarjeta esté dentro de una grilla).
+            canvas = widget.parentWidget()
+            while canvas.parentWidget() is not None and canvas.objectName() != "canvas":
+                canvas = canvas.parentWidget()
+            if canvas.objectName() != "canvas":
+                canvas = widget.parentWidget()
+            area = QRect(widget.mapTo(canvas, QPoint(0, 0)), widget.size())
+            canvas.update(area.adjusted(-18, -18, 18, 18 + RISE))
 
     def draw(self, painter: QPainter) -> None:  # noqa: D401
         painter.save()
@@ -87,7 +94,9 @@ def cascade(layout, limit: int = 16) -> None:
             item = lay.itemAt(index)
             widget = item.widget()
             if widget is not None:
-                if not widget.isHidden():
+                if getattr(widget, "is_container", False) and widget.layout() is not None and depth < 3:
+                    collect(widget.layout(), depth + 1)   # grillas que se acomodan solas: entran sus tarjetas
+                elif not widget.isHidden():
                     widgets.append(widget)
             elif item.layout() is not None and depth < 2:
                 collect(item.layout(), depth + 1)
@@ -123,10 +132,12 @@ class HoverGlow(QObject):
         widget.installEventFilter(self)
 
     def eventFilter(self, obj, event):  # noqa: N802
-        if event.type() == QEvent.Type.Enter:
-            self._go(1.0)
-        elif event.type() == QEvent.Type.Leave:
-            self._go(0.0)
+        kind = event.type()
+        if kind in (QEvent.Type.Enter, QEvent.Type.Leave):
+            try:
+                self._go(1.0 if kind == QEvent.Type.Enter else 0.0)
+            except RuntimeError:
+                pass   # la tarjeta se está borrando (se cambió de pantalla con el mouse encima): no hay nada que iluminar
         return False
 
     def _go(self, target: float) -> None:

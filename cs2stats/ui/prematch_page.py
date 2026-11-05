@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
-from ..assets import player_avatar
+from ..assets import map_key, player_avatar
 from ..i18n import t
 from ..metrics import map_label
 from ..prematch import analyze
@@ -21,7 +21,7 @@ TAGS = {"awp": (t("AWPer"), "chipBad"), "entry": (t("Entry fragger"), "chipBad")
 
 def pool_label(key: str) -> str:
     """Nombre del mapa a partir de la clave del análisis ("dust ii" → Dust II)."""
-    return map_label("de_" + key.replace(" ii", "2").replace(" ", "")) if key else "—"
+    return map_label(map_key(key)) if key else "—"
 
 
 class SideBars(QWidget):

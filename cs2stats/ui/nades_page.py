@@ -15,6 +15,8 @@ from ..parser import GRID
 from ..recorder import clip_meta, clip_path
 from .clip_player import ClipPlayer
 from .pages import card, chip, clear
+from .radar import radar_for
+from .responsive import FlowGrid
 from .theme import ACCENT, MUTED, TEXT, button, fmt_num, label
 from .visual import svg_pixmap
 
@@ -29,7 +31,10 @@ class MapChip(QWidget):
         self.map_name, self.count, self.selected = map_name, count, False
         path = map_image(map_name)
         self.image = QPixmap(str(path)) if path else QPixmap()
-        self.setFixedSize(150, 74)
+        self.setFixedHeight(74)
+        self.setMinimumWidth(104)
+        self.setMaximumWidth(150)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def mousePressEvent(self, _event):  # noqa: N802
@@ -77,8 +82,8 @@ class LineupRow(QFrame):
         row.addWidget(icon)
         text = QVBoxLayout()
         text.setSpacing(1)
-        text.addWidget(label(lineup.title, "insightTitle"))
-        text.addWidget(label(lineup.subtitle, "smallMuted"))
+        text.addWidget(label(lineup.title, "insightTitle", wrap=True))
+        text.addWidget(label(lineup.subtitle, "smallMuted", wrap=True))
         row.addLayout(text, 1)
         if lineup.count:
             uses = (t("1 vez") if lineup.count == 1 else t("{0} veces").format(lineup.count))
@@ -98,28 +103,30 @@ class LineupRow(QFrame):
 
 
 class RadarView(QWidget):
-    """Mapa armado con las posiciones de los jugadores en tus demos, con el tiro y la caída de la lata."""
+    """El radar del mapa (o, si el juego no lo trae, el mapa armado con tus demos), con el tiro y la caída de la lata."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.grid: MapGrid | None = None
+        self.official = None
         self.lineup: Lineup | None = None
         self.setMinimumHeight(300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-    def set_data(self, grid: MapGrid | None, lineup: Lineup | None) -> None:
+    def set_data(self, grid: MapGrid | None, lineup: Lineup | None, map_name: str = "") -> None:
         self.grid, self.lineup = grid, lineup
+        self.official = radar_for(lineup.map if lineup else map_name)
         self.update()
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.fillRect(self.rect(), QColor("#0f1216"))
-        if not self.grid or not self.grid.cells:
+        if not self.official and (not self.grid or not self.grid.cells):
             painter.setPen(QColor(MUTED))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, t("Sin datos de este mapa"))
             return
-        x0, y0, x1, y1 = self.grid.bounds()
+        x0, y0, x1, y1 = self.official.bounds() if self.official else self.grid.bounds()
         pad = 14
         scale = min((self.width() - 2 * pad) / max(1, x1 - x0), (self.height() - 2 * pad) / max(1, y1 - y0))
         ox = (self.width() - (x1 - x0) * scale) / 2
@@ -128,15 +135,18 @@ class RadarView(QWidget):
         def to_screen(x: float, y: float) -> QPointF:
             return QPointF(ox + (x - x0) * scale, oy + (y1 - y) * scale)  # en el juego la Y crece hacia arriba
 
-        zs = [c[0] for c in self.grid.cells.values()]
-        z_low, z_high = min(zs), max(max(zs), min(zs) + 1)
-        size = max(2.0, GRID * scale)
-        painter.setPen(Qt.PenStyle.NoPen)
-        for (gx, gy), (z, _place, _n) in self.grid.cells.items():
-            shade = int(52 + 70 * (z - z_low) / (z_high - z_low))
-            painter.setBrush(QColor(shade, shade + 6, shade + 12))
-            p = to_screen(gx * GRID, (gy + 1) * GRID)
-            painter.drawRect(QRectF(p.x(), p.y(), size + 0.6, size + 0.6))
+        if self.official:
+            self.official.paint(painter, to_screen, 0.9)
+        else:
+            zs = [c[0] for c in self.grid.cells.values()]
+            z_low, z_high = min(zs), max(max(zs), min(zs) + 1)
+            size = max(2.0, GRID * scale)
+            painter.setPen(Qt.PenStyle.NoPen)
+            for (gx, gy), (z, _place, _n) in self.grid.cells.items():
+                shade = int(52 + 70 * (z - z_low) / (z_high - z_low))
+                painter.setBrush(QColor(shade, shade + 6, shade + 12))
+                p = to_screen(gx * GRID, (gy + 1) * GRID)
+                painter.drawRect(QRectF(p.x(), p.y(), size + 0.6, size + 0.6))
         if not self.lineup:
             return
         color = QColor(TYPE_COLORS[self.lineup.type])
@@ -417,10 +427,10 @@ class NadesPage(QWidget):
         self.steps = label("", "", wrap=True)
         self.steps.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self.steps)
-        self.info = QHBoxLayout()
-        layout.addLayout(self.info)
+        self.info = FlowGrid(5, 14)
+        layout.addWidget(self.info)
         command_row = QHBoxLayout()
-        self.command = label("", "smallMuted")
+        self.command = label("", "smallMuted", wrap=True)
         self.command.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         command_row.addWidget(self.command, 1)
         copy = button(t("Copiar comando de práctica"))
@@ -487,7 +497,7 @@ class NadesPage(QWidget):
             chip_widget = MapChip(name, len(lineups[name]))
             chip_widget.selected = name == self.map_name
             chip_widget.clicked.connect(self._pick_map)
-            self.maps_row.addWidget(chip_widget)
+            self.maps_row.addWidget(chip_widget, 1)   # crecen hasta 150 px; si no entran, se achican parejo
         self.maps_row.addStretch(1)
 
     def _pick_map(self, name: str) -> None:
@@ -533,8 +543,8 @@ class NadesPage(QWidget):
 
     def _show_detail(self, lineup: Lineup | None) -> None:
         grid = self.data[1].get(self.map_name) if self.data else None
-        self.radar.set_data(grid, lineup)
-        clear(self.info)
+        self.radar.set_data(grid, lineup, self.map_name)
+        self.info.clear()
         if not lineup:
             self.detail_title.setText(t("Elegí una lata"))
             self.detail_sub.setText("")
@@ -552,11 +562,13 @@ class NadesPage(QWidget):
                              (t("EN TUS PARTIDAS"), (t("1 vez") if lineup.count == 1 else t("{0} veces").format(lineup.count))),
                              (t("TUYAS"), str(lineup.mine)),
                              (t("TARDA EN CAER"), f"{fmt_num(lineup.flight, 1)} s" if lineup.flight else "—")):
-            col = QVBoxLayout()
+            cell = QWidget()
+            col = QVBoxLayout(cell)
+            col.setContentsMargins(0, 0, 0, 0)
             col.setSpacing(0)
             col.addWidget(label(title, "cardTitle"))
             col.addWidget(label(value, "midValue"))
-            self.info.addLayout(col)
+            self.info.add(cell)
         self.command.setText(lineup.practice_command)
 
     def _record(self) -> None:

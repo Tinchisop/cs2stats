@@ -780,5 +780,100 @@ class AvisoRapidoTest(unittest.TestCase):
         self.assertEqual([u["status"] for u in updates], ["con_url", "vencida"])
 
 
+
+def vtex(width: int, height: int, kind: int, pixels: bytes, compressed: bool = False) -> bytes:
+    """Una textura de Source 2 mínima (.vtex_c) con un solo nivel, como las de los radares."""
+    import struct
+    data = struct.pack("<HH4f", 1, 0, 0, 0, 0, 0) + struct.pack("<HHHBBI", width, height, 1, kind, 1, 0)
+    if compressed:
+        import pyarrow
+        packed = pyarrow.compress(pixels, codec="lz4_raw", asbytes=True)
+        # datos extra: una entrada de tipo 4 (tamaño de cada nivel comprimido) que apunta justo después de ella
+        data += struct.pack("<II", 8, 1) + struct.pack("<III", 4, 8, 16) + struct.pack("<IIII", 1, 8, 1, len(packed))
+        body = packed
+    else:
+        data += struct.pack("<II", 8, 0)
+        body = pixels
+    header = struct.pack("<IHHII", 0, 12, 1, 8, 1) + b"DATA" + struct.pack("<II", 8, len(data))
+    return header + data + body
+
+
+class RadarTest(unittest.TestCase):
+    """Radar del juego: texturas de Source 2 (sin comprimir, con LZ4 y DXT), nombres de mapas y pronóstico."""
+
+    def test_lz4_en_python_igual_que_pyarrow(self):
+        import pyarrow
+        from cs2stats import assets
+        raw = bytes(range(256)) * 40 + b"\x00" * 5000 + b"abcd" * 900 + bytes(range(7)) * 3
+        packed = pyarrow.compress(raw, codec="lz4_raw", asbytes=True)
+        self.assertEqual(assets.lz4_block(packed, len(raw)), raw)
+        original = pyarrow.decompress
+        pyarrow.decompress = lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("sin LZ4"))
+        try:
+            self.assertEqual(assets.lz4_block(packed, len(raw)), raw)
+        finally:
+            pyarrow.decompress = original
+
+    def test_textura_bgra_con_y_sin_lz4(self):
+        from cs2stats.assets import vtex_image
+        # 2x2: azul, verde / rojo, blanco transparente (bytes B, G, R, A)
+        pixels = bytes([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 0])
+        for compressed in (False, True):
+            image = vtex_image(vtex(2, 2, 28, pixels, compressed))
+            self.assertIsNotNone(image)
+            self.assertEqual((image.width(), image.height()), (2, 2))
+            self.assertEqual(image.pixelColor(0, 0).name(), "#0000ff")
+            self.assertEqual(image.pixelColor(1, 0).name(), "#00ff00")
+            self.assertEqual(image.pixelColor(0, 1).name(), "#ff0000")
+            self.assertEqual(image.pixelColor(1, 1).alpha(), 0)
+
+    def test_textura_dxt1_y_dxt5(self):
+        import struct
+        from cs2stats.assets import vtex_image
+        # DXT1, 8x4: un bloque todo rojo (índice 0) y otro todo azul (índice 1)
+        blocks = struct.pack("<HHI", 0xF800, 0x001F, 0) + struct.pack("<HHI", 0xF800, 0x001F, 0x55555555)
+        image = vtex_image(vtex(8, 4, 1, blocks))
+        self.assertEqual(image.pixelColor(1, 1).name(), "#ff0000")
+        self.assertEqual(image.pixelColor(6, 2).name(), "#0000ff")
+        self.assertEqual(image.pixelColor(6, 2).alpha(), 255)
+        # DXT5, 4x4: verde con alfa 0 en todos (índice de alfa 1 con a0=255, a1=0)
+        ones = sum(1 << (3 * i) for i in range(16)).to_bytes(6, "little")
+        block = bytes([255, 0]) + ones + struct.pack("<HHI", 0x07E0, 0, 0)
+        image = vtex_image(vtex(4, 4, 2, block))
+        self.assertEqual(image.pixelColor(2, 2).alpha(), 0)
+        block = bytes([255, 0]) + bytes(6) + struct.pack("<HHI", 0x07E0, 0, 0)
+        image = vtex_image(vtex(4, 4, 2, block))
+        self.assertEqual(image.pixelColor(2, 2).name(), "#00ff00")
+        self.assertEqual(image.pixelColor(2, 2).alpha(), 255)
+
+    def test_textura_rota_no_rompe(self):
+        from cs2stats.assets import vtex_image
+        self.assertIsNone(vtex_image(b"basura"))
+        self.assertIsNone(vtex_image(vtex(4, 4, 28, b"\x00" * 8)))   # faltan píxeles
+
+    def test_nombre_interno_del_mapa(self):
+        from cs2stats.assets import map_key
+        from cs2stats.metrics import map_label
+        self.assertEqual(map_key("Dust II"), "de_dust2")
+        self.assertEqual(map_key("Office"), "cs_office")
+        self.assertEqual(map_key("de_nuke"), "de_nuke")
+        self.assertEqual(map_key("cs_italy"), "cs_italy")
+        self.assertEqual(map_label("cs_office"), "Office")
+        self.assertEqual(map_label("de_poseidon"), "Poseidon")
+
+    def test_pronostico_sin_rendiciones(self):
+        from cs2stats.progress import premier_forecast
+        changes = [300, -300] * 6 + [-1000, -1000, 300]
+        rating, matches = 10000, []
+        for change in changes:
+            rating += change
+            matches.append({"rank_type": 11, "rank_new": rating, "rank_change": change})
+        forecast = premier_forecast(matches)
+        self.assertEqual(forecast.skipped, 2)
+        self.assertEqual(forecast.games, 13)
+        self.assertGreater(forecast.per_match, 0)          # sin las rendiciones vas parejo, no cayendo
+        self.assertEqual(forecast.current, rating)
+
+
 if __name__ == "__main__":
     unittest.main()

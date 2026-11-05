@@ -17,9 +17,11 @@ from ..i18n import t
 from ..metrics import map_label, weapon_label
 from ..nades import GRID, TYPE_COLORS
 from ..replay import CELL, FAILS
+from .radar import radar_for
 from .theme import ACCENT, BAD, BG, CT_COLOR, MUTED, T_COLOR, TEXT, button, icon, label
 
 TEAM_COLORS = {"T": T_COLOR, "CT": CT_COLOR}
+RADAR_OPACITY = 0.85      # el radar un poco apagado, para que resalten los jugadores y las granadas
 SMOKE_TIME, MOLOTOV_TIME, POP_TIME = 18.0, 7.0, 0.45
 ROUND_TIME, BOMB_TIME = 115.0, 40.0
 SPEEDS = (0.5, 1.0, 2.0, 4.0)
@@ -57,8 +59,12 @@ class ReplayScene:
         self.cells = data.get("cells") or []
         self.grid = grid
         self.markers = map_markers(data.get("map", ""))
+        self.radar = radar_for(data.get("map", ""))
         self._base: QImage | None = None
         self._base_key = None
+        if self.radar:
+            self.frame = self.radar.bounds()
+            return
         xs = [c[0] * CELL for c in self.cells] + [c[0] * CELL + CELL for c in self.cells]
         ys = [c[1] * CELL for c in self.cells] + [c[1] * CELL + CELL for c in self.cells]
         if not xs:
@@ -96,7 +102,17 @@ class ReplayScene:
 
     # Dibujo
     def _paint_base(self, rect: QRectF) -> QImage:
-        # El piso se pinta a media resolución y se agranda suave: así los bordes de las celdas no se ven escalonados.
+        if self.radar:
+            image = QImage(max(1, int(rect.width())), max(1, int(rect.height())), QImage.Format.Format_ARGB32_Premultiplied)
+            image.fill(QColor("#0d1115"))
+            painter = QPainter(image)
+            _scale, to_screen = self.mapper(QRectF(0, 0, image.width(), image.height()))
+            self.radar.paint(painter, to_screen, RADAR_OPACITY)
+            painter.end()
+            self._paint_markers(image, rect)
+            return image
+        # Sin radar: el mapa armado con las posiciones. El piso se pinta a media resolución y se agranda suave, así
+        # los bordes de las celdas no se ven escalonados.
         half = QImage(max(1, int(rect.width() / 2)), max(1, int(rect.height() / 2)), QImage.Format.Format_ARGB32_Premultiplied)
         half.fill(QColor("#0d1115"))
         painter = QPainter(half)
@@ -120,16 +136,21 @@ class ReplayScene:
         painter.end()
         image = half.scaled(int(rect.width()), int(rect.height()), Qt.AspectRatioMode.IgnoreAspectRatio,
                             Qt.TransformationMode.SmoothTransformation)
+        self._paint_markers(image, rect)
+        return image
+
+    def _paint_markers(self, image: QImage, rect: QRectF) -> None:
+        """Las letras de los sitios (A, B) y los spawns, grandes y apenas marcadas."""
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        scale, to_screen = self.mapper(QRectF(0, 0, rect.width(), rect.height()))
+        _scale, to_screen = self.mapper(QRectF(0, 0, rect.width(), rect.height()))
         painter.setFont(QFont("Segoe UI Variable Display", max(14, int(30 * min(1.0, rect.width() / 700))), QFont.Weight.Black))
+        strong, soft = (110, 50) if self.radar else (46, 26)
         for name, (x, y) in self.markers.items():
             p = to_screen(x, y)
-            painter.setPen(QColor(255, 255, 255, 46 if name in ("A", "B") else 26))
+            painter.setPen(QColor(255, 255, 255, strong if name in ("A", "B") else soft))
             painter.drawText(QRectF(p.x() - 40, p.y() - 24, 80, 48), Qt.AlignmentFlag.AlignCenter, name)
         painter.end()
-        return image
 
     def paint(self, painter: QPainter, rect: QRectF, index: int, at: float, names: bool = True) -> None:
         if not (0 <= index < len(self.rounds)):
@@ -228,7 +249,6 @@ class ReplayScene:
                 killed_by[victim] = (when, killer)
 
         # Jugadores: los muertos quedan como una cruz; vos con un aro turquesa.
-        painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
         order = sorted(spots, key=lambda p: (p == self.me, spots[p][3] > 0))
         for player in order:
             x, y, yaw, health = spots[player]
@@ -269,12 +289,45 @@ class ReplayScene:
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawArc(QRectF(center.x() - radius - 3, center.y() - radius - 3, 2 * radius + 6, 2 * radius + 6),
                                 90 * 16, int(360 * 16 * max(0, health) / 100))
-            if names:
-                name = self.players.get(player, "")[:14]
-                painter.setPen(QColor(TEXT if mine else "#c6ccd3"))
-                painter.drawText(QRectF(center.x() - 60, center.y() - radius - 17, 120, 14), Qt.AlignmentFlag.AlignCenter, name)
+        if names:
+            self._paint_names(painter, to_screen, spots, killed_by)
 
         self._paint_hud(painter, rect, rnd, at, spots, killed_by)
+
+    def _paint_names(self, painter: QPainter, to_screen, spots: dict, killed_by: dict) -> None:
+        """Nombres de los vivos sin que se pisen: arriba del círculo y, si ahí ya hay otro, abajo o a un costado.
+        El tuyo elige primero."""
+        painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        metrics = painter.fontMetrics()
+        placed: list[QRectF] = []
+        alive = [p for p in spots if spots[p][3] > 0 and p not in killed_by]
+        alive.sort(key=lambda p: p != self.me)
+        for player in alive:
+            name = self.players.get(player, "")[:14]
+            if not name:
+                continue
+            x, y, _yaw, _health = spots[player]
+            center = to_screen(x, y)
+            radius = 8.5 if player == self.me else 7.0
+            width, height = metrics.horizontalAdvance(name) + 6, 13
+            options = []
+            for row in range(4):   # cuando están todos juntos (en el spawn), los nombres se apilan hacia afuera
+                shift = row * height
+                options += [QRectF(center.x() - width / 2, center.y() - radius - 16 - shift, width, height),
+                            QRectF(center.x() - width / 2, center.y() + radius + 4 + shift, width, height),
+                            QRectF(center.x() + radius + 9, center.y() - height / 2 - shift, width, height),
+                            QRectF(center.x() - radius - 9 - width, center.y() - height / 2 + shift, width, height)]
+            box = next((o for o in options if not any(o.intersects(other) for other in placed)), None)
+            if box is None:
+                if player != self.me:
+                    continue   # no entra sin pisar otro nombre: mejor no escribirlo que hacerlo ilegible
+                box = options[0]
+            placed.append(box)
+            # Sombra oscura detrás de las letras: se leen igual sobre cualquier parte del radar.
+            painter.setPen(QColor(0, 0, 0, 200))
+            painter.drawText(box.translated(1, 1), Qt.AlignmentFlag.AlignCenter, name)
+            painter.setPen(QColor(TEXT if player == self.me else "#d5dae0"))
+            painter.drawText(box, Qt.AlignmentFlag.AlignCenter, name)
 
     def _paint_hud(self, painter: QPainter, rect: QRectF, rnd: dict, at: float, spots: dict, killed_by: dict) -> None:
         teams = rnd["teams"]

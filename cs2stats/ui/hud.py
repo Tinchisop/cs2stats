@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
@@ -291,7 +291,8 @@ class MatchCarousel(Growing, Hovering, QWidget):
         self.update()
 
     def scroll_by(self, cards: int) -> None:
-        target = max(0.0, min(self._max_offset(), (self.slide.endValue() if self.slide.state() else self.offset)
+        running = self.slide.state() == QAbstractAnimation.State.Running and self.slide.endValue() is not None
+        target = max(0.0, min(self._max_offset(), (float(self.slide.endValue()) if running else self.offset)
                               + cards * (self.CARD_W + self.GAP)))
         self.slide.stop()
         self.slide.setStartValue(self.offset)

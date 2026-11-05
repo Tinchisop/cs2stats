@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QFrame, QGridLay
                                QHeaderView, QLabel, QMenu, QPushButton, QScrollArea, QSizePolicy, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
+from ..assets import map_key
 from ..i18n import language, t
 from ..benchmarks import BY_KEY, MIN_SAMPLES, against_level, derived, tier_label
 from ..faceit import LEVEL_COLORS, LEVELS, games_to_level, level_at, level_progress
@@ -23,6 +24,7 @@ from .charts import BarList, ColumnChart, PercentileBar, SideCompare, TrendChart
 from .heatmap import HeatMap, hot_zones
 from .hud import CoachBot, MatchCarousel, RadarChart, Sparkline, TierProgress, map_picture, tier_progress
 from .motion import CountUp, glow_effect, hover_glow
+from .responsive import FlowGrid
 from .visual import Avatar, FaceitLevel, MapCard, PremierBadge, WeaponRow
 from .theme import (ACCENT, ACCENT_SOFT, BAD, CT_COLOR, GOOD, MID, MUTED, SUBTLE, TEXT, button, fmt_metric, fmt_num,
                     fmt_pct, icon, label, panel, rating_color, score_color)
@@ -51,7 +53,8 @@ def scroll_page() -> tuple[QScrollArea, QVBoxLayout]:
     area = QScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QFrame.Shape.NoFrame)
-    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    # Lo que se acomoda solo (FlowGrid, StackRow) entra; si igual algo no entra, aparece la barra en vez de cortarse.
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     canvas = QWidget()
     canvas.setObjectName("canvas")
     GlowLayer(canvas)
@@ -368,7 +371,7 @@ class ProfilePage(Page):
         grid.setSpacing(14)
         grid.addWidget(self._carousel(view), 0, 0, 1, 2)
         grid.addWidget(radar_card(view["comparisons"]), 0, 2, 2, 1)
-        grid.addLayout(self._kpis(view), 1, 0, 1, 2)
+        grid.addWidget(self._kpis(view), 1, 0, 1, 2)
         grid.addWidget(self._coach(view), 2, 0)
         grid.addWidget(self._challenges(view), 2, 1, 1, 2)
         for col, stretch in enumerate((4, 4, 3)):
@@ -648,9 +651,8 @@ class ProfilePage(Page):
         layout.addWidget(strip)
         return box
 
-    def _kpis(self, view: dict) -> QGridLayout:
-        grid = QGridLayout()
-        grid.setSpacing(10)
+    def _kpis(self, view: dict) -> FlowGrid:
+        grid = FlowGrid(4, 10)
         comps = {c.metric.key: c for c in view["recent_comparisons"]}
         recent = view["matches"][-15:]
         for index, key in enumerate(("rating", "adr", "kast", "hs")):
@@ -661,7 +663,7 @@ class ProfilePage(Page):
             tile = StatTile(name="kpiCardHot" if key == "rating" else "kpiCard")
             spark = [match_value(m, key) for m in recent]
             tile.fill(metric.label, value, metric.kind, color if value is not None else TEXT, comp, "", spark)
-            grid.addWidget(tile, 0, index)
+            grid.add(tile)
         return grid
 
     def _coach(self, view: dict) -> QFrame:
@@ -806,8 +808,7 @@ def map_table_icon(map_name: str) -> QIcon:
     """Foto chiquita del mapa con esquinas redondeadas, para la columna Mapa."""
     key = ("tabla", map_name)
     if key not in _icons:
-        picture = map_picture(map_name if map_name.startswith("de_") else "de_" + map_name.lower().replace(" ii", "2").replace(" ", ""),
-                              54, 30)
+        picture = map_picture(map_key(map_name), 54, 30)
         canvas = QPixmap(108, 60)
         canvas.setDevicePixelRatio(2)
         canvas.fill(Qt.GlobalColor.transparent)
@@ -1125,7 +1126,7 @@ class MapsPage(Page):
             names[map_label(m["map"]).lower()] = m["map"]
         for h in history:
             key = h["map"].lower()
-            names.setdefault(key, "de_" + key.replace(" ii", "2").replace(" ", ""))
+            names.setdefault(key, map_key(h["map"]))   # Office es cs_office: el nombre interno sale de map_key
         cards = []
         for key, raw in names.items():
             hist = [h for h in history if h["map"].lower() == key]
@@ -1241,9 +1242,9 @@ class MapsPage(Page):
         row.setSpacing(16)
         heat = HeatMap()
         if early:
-            heat.set_data(grid, [], data["early"], "deaths")
+            heat.set_data(grid, [], data["early"], "deaths", self.heat_map)
         else:
-            heat.set_data(grid, data["kills"], data["deaths"], self.heat_mode)
+            heat.set_data(grid, data["kills"], data["deaths"], self.heat_mode, self.heat_map)
         row.addWidget(heat, 3)
         side = QVBoxLayout()
         side.setSpacing(6)
@@ -1378,29 +1379,30 @@ class UtilityPage(Page):
             self.body.addStretch(1)
             return
         comps = {c.metric.key: c for c in view["comparisons"]}
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        for index, key in enumerate(("flashes_per_round", "blinded_per_flash", "team_flash_rate", "util_adr")):
+        grid = FlowGrid(4)
+        for key in ("flashes_per_round", "blinded_per_flash", "team_flash_rate", "util_adr"):
             comp = comps.get(key)
             tile = StatTile()
             spark = [match_value(m, key) for m in view["matches"][-15:]]
             tile.fill(BY_KEY[key].label, comp.mine if comp else None, BY_KEY[key].kind,
                       score_color(comp.score if comp else None), comp, "", spark)
-            grid.addWidget(tile, 0, index)
-        self.body.addLayout(grid)
+            grid.add(tile)
+        self.body.addWidget(grid)
         s = view["total"]
         n = max(1, s["rounds"])
         box, layout = card(t("Granadas"), t("Flash efectiva: el enemigo quedó ciego más de 0,7 segundos"))
-        row = QHBoxLayout()
+        row = FlowGrid(7, 14)
         for title, value in ((t("Flashes"), s["flashes"]), (t("Enemigos cegados"), s["enemies_flashed"]),
                              (t("Compañeros cegados"), s["team_flashed"]), (t("Humos"), s["smokes"]), (t("Molotovs"), s["molotovs"]),
                              (t("HE"), s["hes"]), (t("Asistencias por flash"), s["flash_assists"])):
-            col = QVBoxLayout()
+            cell = QWidget()
+            col = QVBoxLayout(cell)
+            col.setContentsMargins(0, 0, 0, 0)
             col.addWidget(label(title.upper(), "cardTitle"))
             col.addWidget(CountUp(value, lambda v: fmt_num(v, 0), "bigValue"))
             col.addWidget(label(t('{0} cada 10 rondas').format(fmt_num(value / n * 10)), "smallMuted"))
-            row.addLayout(col)
-        layout.addLayout(row)
+            row.add(cell)
+        layout.addWidget(row)
         self.body.addWidget(box)
         box, layout = card(t("Rondas ganadas según la compra de tu equipo"), t("Ahorro: menos de $1.250 promedio · Forzada: hasta $3.500"))
         eco = BarList()
@@ -1518,8 +1520,7 @@ class HistoryPage(Page):
         wins = sum(1 for h in history if h["result"] == "W")
         ties = sum(1 for h in history if h["result"] == "T")
         kills, deaths = sum(h["kills"] for h in history), sum(h["deaths"] for h in history)
-        grid = QGridLayout()
-        grid.setSpacing(12)
+        grid = FlowGrid(5)
         tiles = [(t("Partidas"), games, lambda v: fmt_num(v, 0), TEXT, t('desde {0}').format(history[0]['played_at'][:10])),
                  (t("Victorias"), wins / games, fmt_pct, score_color(wins / games * 100), t('{0} ganadas · {1} perdidas · {2} empates').format(wins, games - wins - ties, ties)),
                  ("K/D", kills / deaths if deaths else None, lambda v: fmt_num(v, 2), TEXT, t('{0} kills · {1} muertes').format(kills, deaths)),
@@ -1535,8 +1536,8 @@ class HistoryPage(Page):
             big.setStyleSheet(f"color: {color};")
             layout.addWidget(big)
             layout.addWidget(label(note, "smallMuted"))
-            grid.addWidget(box, 0, index)
-        body.addLayout(grid)
+            grid.add(box)
+        body.addWidget(grid)
 
         months: dict[str, list] = {}
         for h in history:

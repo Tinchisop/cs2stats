@@ -6,7 +6,7 @@ como un tramo corto de la repetición 2D que se mira acá o se guarda como MP4 o
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QButtonGroup, QGridLayout, QHBoxLayout, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QPushButton, QVBoxLayout
 
 from ..i18n import t
 from ..metrics import map_label
@@ -14,6 +14,7 @@ from ..replay import FAILS, HIGHLIGHTS
 from .motion import hover_glow
 from .pages import Page, card, chip, empty_state, short_date
 from .replay import ReplayPlayer, ReplayScene, moment_title, save_clip
+from .responsive import FlowGrid
 from .theme import ACCENT, BAD, MUTED, button, label, panel
 
 KIND_NAMES = {"ace": t("As"), "4k": "4K", "3k": "3K", "clutch": t("Clutch"), "no_shots": t("Sin disparar"),
@@ -85,17 +86,15 @@ class ClipsPage(Page):
         shown = {"all": items, "best": best, "fails": fails}[self.filter]
         chosen = next((i for i in items if (i[0]["match_key"], i[1]) == self.selected), None)
         if chosen is None and shown:
-            chosen = shown[0]
+            # Al entrar se ve tu mejor jugada más nueva, no un error (si no hay ninguna buena, la más nueva).
+            chosen = next((i for i in shown if i[2]["kind"] in HIGHLIGHTS), shown[0])
             self.selected = (chosen[0]["match_key"], chosen[1])
         if chosen:
             body.addWidget(self._viewer(*chosen))
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        for position, (match, number, moment) in enumerate(shown[:self.limit]):
-            grid.addWidget(self._tile(match, number, moment), position // 3, position % 3)
-        for col in range(3):
-            grid.setColumnStretch(col, 1)
-        body.addLayout(grid)
+        grid = FlowGrid(3)
+        for match, number, moment in shown[:self.limit]:
+            grid.add(self._tile(match, number, moment))
+        body.addWidget(grid)
         if len(shown) > self.limit:
             more = button(t("Mostrar más jugadas"))
             more.clicked.connect(self._more)

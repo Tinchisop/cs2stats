@@ -1,4 +1,5 @@
-"""Mapa de calor: dónde matás y dónde morís en cada mapa, sobre el mapa armado con las posiciones de tus demos."""
+"""Mapa de calor: dónde matás y dónde morís en cada mapa, sobre el radar del juego (o, si no está, sobre el mapa
+armado con las posiciones de tus demos)."""
 
 from __future__ import annotations
 
@@ -11,10 +12,12 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 from ..i18n import t
 from ..nades import GRID, MapGrid, place_label
 from .motion import Growing
+from .radar import radar_for
 from .theme import BAD, MUTED
 
 KILL_COLOR = "#22d3a6"
 DEATH_COLOR = BAD
+RADAR_OPACITY = 0.6     # el radar apagado, para que el calor se lea encima
 
 
 def hot_zones(grid: MapGrid | None, points: list[list], count: int = 4) -> list[tuple[str, int]]:
@@ -33,6 +36,7 @@ class HeatMap(Growing, QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.grid: MapGrid | None = None
+        self.radar = None
         self.kills: list[list] = []
         self.deaths: list[list] = []
         self.mode = "deaths"
@@ -41,8 +45,9 @@ class HeatMap(Growing, QWidget):
         self.setMinimumHeight(380)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-    def set_data(self, grid: MapGrid | None, kills: list[list], deaths: list[list], mode: str) -> None:
+    def set_data(self, grid: MapGrid | None, kills: list[list], deaths: list[list], mode: str, map_name: str = "") -> None:
         self.grid, self.kills, self.deaths, self.mode = grid, kills, deaths, mode
+        self.radar = radar_for(map_name)
         self._base = self._heat = None
         if self.isVisible():
             self.start_grow()
@@ -53,7 +58,9 @@ class HeatMap(Growing, QWidget):
         super().resizeEvent(event)
 
     def _frame(self) -> tuple[float, float, float, float]:
-        """Límites del mapa en unidades del juego (el mapa armado o, si no hay, los puntos)."""
+        """Límites del mapa en unidades del juego (el radar, el mapa armado o, si no hay ninguno, los puntos)."""
+        if self.radar:
+            return self.radar.bounds()
         if self.grid and self.grid.cells:
             return self.grid.bounds()
         points = self.kills + self.deaths
@@ -71,7 +78,12 @@ class HeatMap(Growing, QWidget):
     def _paint_base(self) -> QImage:
         image = QImage(self.size(), QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(QColor("#0d1115"))
-        if self.grid and self.grid.cells:
+        if self.radar:
+            painter = QPainter(image)
+            _scale, to_screen = self._mapper()
+            self.radar.paint(painter, to_screen, RADAR_OPACITY)
+            painter.end()
+        elif self.grid and self.grid.cells:
             painter = QPainter(image)
             scale, to_screen = self._mapper()
             zs = [c[0] for c in self.grid.cells.values()]

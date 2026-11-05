@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass
 
 from .i18n import t
@@ -93,6 +94,9 @@ def achievements(matches: list[dict], history: list[dict]) -> list[Achievement]:
     ]
 
 
+OUTLIER = 2.0   # veces el cambio normal de Premier a partir del cual una partida no entra en el pronóstico
+
+
 @dataclass
 class Forecast:
     current: int
@@ -102,14 +106,21 @@ class Forecast:
     per_match: float
     games: int
     points: list[float]     # rating esperado después de cada una de las próximas partidas
+    skipped: int = 0        # partidas que no cuentan: cambios fuera de lo común (rendiciones, abandonos)
 
 
 def premier_forecast(matches: list[dict], ahead: int = 10, window: int = 15) -> Forecast | None:
     """Dónde vas a estar en Premier dentro de unas partidas si seguís como en las últimas.
 
-    Usa el promedio de lo que sumaste o perdiste por partida, con un margen según cuánto varía."""
+    Usa el promedio de lo que sumaste o perdiste por partida, con un margen según cuánto varía. Las partidas con un
+    cambio de más del doble de lo normal (una rendición o un abandono pueden restar 1000 de una) no entran en el
+    promedio: una sola de esas llevada a 10 partidas haría parecer que vas a caer mucho más de lo que juegas."""
     premier = [m for m in matches if m.get("rank_type") == 11 and m.get("rank_new")]
-    changes = [float(m.get("rank_change") or 0) for m in premier[-window:]]
+    recent = [float(m.get("rank_change") or 0) for m in premier[-window:]]
+    if len(recent) < 5:
+        return None
+    usual = statistics.median(abs(c) for c in recent)
+    changes = [c for c in recent if not usual or abs(c) <= OUTLIER * usual]
     if len(changes) < 5:
         return None
     mean = sum(changes) / len(changes)
@@ -118,7 +129,7 @@ def premier_forecast(matches: list[dict], ahead: int = 10, window: int = 15) -> 
     margin = ahead * spread / math.sqrt(len(changes))   # error del promedio, llevado a las partidas que vienen
     expected = current + mean * ahead
     return Forecast(current, round(expected), round(expected - margin), round(expected + margin), mean, len(changes),
-                    [current + mean * (i + 1) for i in range(ahead)])
+                    [current + mean * (i + 1) for i in range(ahead)], len(recent) - len(changes))
 
 
 # Metas: tipo → (nombre, cómo leer tu valor actual). Las de métricas usan tus últimas 10 partidas con demo.

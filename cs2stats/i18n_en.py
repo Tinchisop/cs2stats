@@ -1012,6 +1012,10 @@ EN = {
     "AHORA": "NOW", "EN 10 PARTIDAS": "IN 10 MATCHES", "RANGO PROBABLE": "LIKELY RANGE",
     "{0} pts por partida en promedio": "{0} pts per match on average",
     "Es una estimación con tu promedio reciente: cambia con cada partida.": "It's an estimate from your recent average: it changes every match.",
+    "sin contar {0} fuera de lo común": "leaving out {0} unusual ones",
+    "Las partidas que sumaron o restaron más del doble de lo normal (por ejemplo, una rendición que resta 1000) no cuentan para el promedio.":
+        "Matches that added or took away more than twice the usual amount (for example, a surrender that takes away 1000) don't count toward the average.",
+    "Las rendiciones y los abandonos no cuentan para el promedio.": "Surrenders and abandons don't count toward the average.",
     "Línea punteada: pronóstico si seguís como en las últimas {0}": "Dashed line: forecast if you keep playing like your last {0}",
     "~{0} en {1} partidas": "~{0} in {1} matches",
 

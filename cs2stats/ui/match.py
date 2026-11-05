@@ -17,6 +17,7 @@ from .match_parts import cell, color_legend, divider, glow, header_row, missing_
 from .match_tabs import DuelsTab, ImpactTab, overview_tab, page, utility_tab, your_match_tab
 from .motion import reveal, reveal_children
 from .replay import ReplayTab
+from .responsive import StackRow
 from .pages import card, result_text, scroll_page, short_date
 from .theme import (ACCENT, BAD, BG, CT_COLOR, GOOD, MID, MUTED, T_COLOR, fmt_num, fmt_pct, icon, label, panel,
                     rating_color)
@@ -134,7 +135,7 @@ class MatchView(QWidget):
         self.music_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.music_button.setToolTip(t("Prende o apaga la música del mapa en el detalle de las partidas"))
         self.music_button.setIcon(icon("music", "#dfe2e7", 16))
-        self.music_button.clicked.connect(self.music_toggled.emit)
+        self.music_button.clicked.connect(lambda checked=False: self.music_toggled.emit(bool(checked)))
         top.addWidget(self.music_button)
         body.addLayout(top)
         self.header = QWidget()
@@ -183,8 +184,10 @@ class MatchView(QWidget):
             widget.setVisible(False)
             self.pages[key] = widget
             self.holder.addWidget(widget)
-            # Las tarjetas principales son las que entran animadas.
-            self.cards[key] = [frame for frame in widget.findChildren(QFrame, options=Qt.FindChildOption.FindDirectChildrenOnly)
+            # Las tarjetas principales son las que entran animadas (también las de las filas que se apilan).
+            direct = Qt.FindChildOption.FindDirectChildrenOnly
+            holders = [widget] + widget.findChildren(StackRow, options=direct)
+            self.cards[key] = [frame for holder in holders for frame in holder.findChildren(QFrame, options=direct)
                                if frame.objectName() in ("card", "identityCard", "rowMe")]
         return self.pages[key]
 
@@ -295,7 +298,12 @@ class MatchView(QWidget):
         return entry if entry and entry.get("level") else None
 
     def _header(self, m: dict, s: dict) -> QHBoxLayout:
-        row = QHBoxLayout()
+        outer = QHBoxLayout()
+        stack = StackRow(20)
+        outer.addWidget(stack)
+        title = QWidget()
+        row = QHBoxLayout(title)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(20)
         left = QVBoxLayout()
         left.setSpacing(2)
@@ -327,8 +335,10 @@ class MatchView(QWidget):
         left.addLayout(result)
         row.addLayout(left)
         row.addWidget(glow(MapThumb(m["map"]), T_COLOR, 30, 120), 0, Qt.AlignmentFlag.AlignVCenter)
-        row.addWidget(self._player_card(m, s), 1)
-        return row
+        row.addStretch(1)
+        stack.addWidget(title)
+        stack.addWidget(self._player_card(m, s), 1)
+        return outer
 
     def _player_card(self, m: dict, s: dict) -> QFrame:
         box = panel("playerCard")
@@ -405,8 +415,7 @@ class MatchView(QWidget):
 
     def _board_tab(self, m: dict, s: dict, players: list[dict]) -> QWidget:
         widget, outer = page()
-        columns = QHBoxLayout()
-        columns.setSpacing(16)
+        columns = StackRow(16)
         left = QVBoxLayout()
         left.setSpacing(16)
         rounds_box, layout = card(t("Ronda por ronda"), t("Pasá el mouse por una ronda"))
@@ -421,7 +430,7 @@ class MatchView(QWidget):
         right.addWidget(self._board(players))
         right.addStretch(1)
         columns.addLayout(right, 7)
-        outer.addLayout(columns)
+        outer.addWidget(columns)
         return widget
 
     def _stats(self, s: dict) -> QFrame:
