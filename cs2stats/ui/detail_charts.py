@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 from ..i18n import t
+from .match_fx import heat_color
 from .motion import Growing
 from .theme import BAD, CT_COLOR, GOOD, MUTED, SUBTLE, T_COLOR, TEXT, fmt_num
 
@@ -40,8 +41,19 @@ class Gauge(Growing, QWidget):
         painter.setPen(QPen(QColor("#262a31"), 9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawArc(rect, int(220 * 16), int(-260 * 16))
         if self.value is not None:
+            sweep = (self._angle(self.value) - 220) * self.grow
+            halo = QColor(self.color)
+            halo.setAlpha(45)
+            painter.setPen(QPen(halo, 20, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.drawArc(rect, int(220 * 16), int(sweep * 16))
             painter.setPen(QPen(QColor(self.color), 9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            painter.drawArc(rect, int(220 * 16), int((self._angle(self.value) - 220) * self.grow * 16))
+            painter.drawArc(rect, int(220 * 16), int(sweep * 16))
+            tip = math.radians(220 + sweep)
+            center = rect.center()
+            point = QPointF(center.x() + 80 * math.cos(tip), center.y() - 80 * math.sin(tip))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 230))
+            painter.drawEllipse(point, 3, 3)
         if self.average is not None:
             angle = math.radians(self._angle(self.average))
             center = rect.center()
@@ -147,10 +159,21 @@ class RoundImpact(Growing, QWidget):
             local = min(1.0, max(0.0, (self.grow - 0.5 * index / len(self.rounds)) / 0.5))
             length = abs(r["value"]) / top * height / 2 * local
             rect = QRectF(x, zero - length, bar_w, length) if r["value"] >= 0 else QRectF(x, zero, bar_w, length)
-            color = QColor(GOOD if r["value"] >= 0 else BAD)
-            color.setAlpha(200)
+            # Color según cuánto sumó o restó: verde fuerte, ámbar cerca de cero, rojo si restó.
+            color = heat_color(r["value"])
+            fill = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+            bright, deep = QColor(color).lighter(118), QColor(color)
+            deep.setAlpha(150)
+            fill.setColorAt(0, bright if r["value"] >= 0 else deep)
+            fill.setColorAt(1, deep if r["value"] >= 0 else bright)
+            if length > 2:
+                halo = QColor(color)
+                halo.setAlpha(40)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(halo)
+                painter.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), 5, 5)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(color)
+            painter.setBrush(fill)
             painter.drawRoundedRect(rect, 3, 3)
             painter.setBrush(QColor(CT_COLOR if r["side"] == "CT" else T_COLOR))
             painter.drawRoundedRect(QRectF(x, self.height() - bottom + 6, bar_w, 3), 1.5, 1.5)
@@ -207,24 +230,29 @@ class MarkerBar(Growing, QWidget):
     def __init__(self, share: float | None, marker: float | None, color: str, parent=None):
         super().__init__(parent)
         self.share, self.marker, self.color = share, marker, color
-        self.setFixedHeight(14)
+        self.setFixedHeight(18)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        track = QRectF(0, 4, self.width(), 6)
+        track = QRectF(0, 5, self.width(), 8)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#262a31"))
-        painter.drawRoundedRect(track, 3, 3)
+        painter.drawRoundedRect(track, 4, 4)
         if self.share is not None:
-            fill = QLinearGradient(track.topLeft(), track.topRight())
+            width = max(8.0, track.width() * self.share * self.grow)
+            fill = QLinearGradient(track.topLeft(), QPointF(width, track.top()))
             dark = QColor(self.color)
-            dark.setAlpha(90)
+            dark.setAlpha(110)
             fill.setColorAt(0, dark)
-            fill.setColorAt(1, QColor(self.color))
+            fill.setColorAt(1, QColor(self.color).lighter(115))
+            halo = QColor(self.color)
+            halo.setAlpha(45)
+            painter.setBrush(halo)
+            painter.drawRoundedRect(QRectF(0, 2, width + 2, 14), 7, 7)
             painter.setBrush(fill)
-            painter.drawRoundedRect(QRectF(0, 4, max(6.0, track.width() * self.share * self.grow), 6), 3, 3)
+            painter.drawRoundedRect(QRectF(0, 5, width, 8), 4, 4)
         if self.marker is not None:
             painter.setBrush(QColor(TEXT))
-            painter.drawRect(QRectF(track.width() * self.marker - 1, 0, 2, 14))
+            painter.drawRoundedRect(QRectF(track.width() * self.marker - 1.5, 0, 3, 18), 1.5, 1.5)

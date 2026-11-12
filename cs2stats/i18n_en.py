@@ -1336,4 +1336,9 @@ EN = {
     "A favor": "In your favor",
     "En gris, los grupos con menos de {0} partidas. El rating solo sale de las partidas con demo.": "In gray, groups with fewer than {0} matches. Rating only comes from matches with a demo.",
     "Cada modo muestra sus números por separado: Premier por un lado, FACEIT por otro": "Each mode shows its own numbers: Premier on one side, FACEIT on the other",
+    "TENDENCIA": "TREND",
+    "Tus últimas {0} partidas y esta (el punto)": "Your last {0} matches and this one (the dot)",
+    "Play o pausa (Espacio)": "Play or pause (Space)",
+    "Siguiente ronda": "Next round",
+    "Repetir esta ronda en bucle": "Loop this round",
 }

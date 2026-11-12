@@ -274,6 +274,12 @@ def icon(kind: str, color: str = MUTED, size: int = 20) -> QIcon:
             painter.drawPath(path)
         bar = 3.5 if flip else 19
         painter.drawRect(QRectF(bar, 6, 1.5, 12))
+    elif kind == "loop":
+        # Dos flechas que giran: repetir.
+        painter.drawArc(QRectF(4, 5, 16, 14), 30 * 16, 150 * 16)
+        painter.drawArc(QRectF(4, 5, 16, 14), 210 * 16, 150 * 16)
+        painter.drawPolyline([QPointF(16.5, 3.5), QPointF(19.2, 7), QPointF(15, 8.2)])
+        painter.drawPolyline([QPointF(7.5, 20.5), QPointF(4.8, 17), QPointF(9, 15.8)])
     elif kind == "volume":
         path = QPainterPath(QPointF(3, 9))
         for x, y in ((7, 9), (12, 5), (12, 19), (7, 15), (3, 15)):
@@ -440,11 +446,13 @@ QLabel#resultWin, QLabel#resultLoss, QLabel#resultTie {{ font-family: 'Segoe UI 
 QLabel#resultWin {{ color: {GOOD}; background: #15241d; border: 1px solid #24432f; }}
 QLabel#resultLoss {{ color: #ffd9de; background: #4a1c24; border: 1px solid #7a3340; }}
 QLabel#resultTie {{ color: {MID}; background: #2a2416; border: 1px solid #4d4126; }}
-QPushButton#tabButton {{ background: rgba(255,255,255,8); border: 1px solid rgba(255,255,255,18); border-bottom: 3px solid transparent;
-                         border-radius: 0; border-top-left-radius: 8px; border-top-right-radius: 8px;
-                         padding: 9px 18px; color: #aeb3bc; font-size: 15px; font-weight: 700; }}
+QPushButton#tabButton {{ background: rgba(12,22,28,150); border: 1px solid rgba(255,255,255,22); border-bottom: 3px solid transparent;
+                         border-radius: 9px; padding: 10px 20px; color: #c3c8cf; font-size: 16px; font-weight: 700; }}
+QPushButton#playButton {{ background: rgba(34,211,166,40); border: 1px solid rgba(34,211,166,140); border-radius: 19px; padding: 0; }}
+QPushButton#playButton:hover {{ background: rgba(34,211,166,80); border-color: {ACCENT}; }}
+QPushButton#tabButton[compact="true"] {{ padding: 8px 11px; font-size: 14px; }}
 QPushButton#tabButton:hover {{ color: {TEXT}; background: rgba(255,255,255,16); }}
-QPushButton#tabButton:checked {{ color: #6ff0cc; border-color: rgba(34,211,166,90); border-bottom: 3px solid {ACCENT};
+QPushButton#tabButton:checked {{ color: #ffffff; border-color: rgba(34,211,166,130); border-bottom: 3px solid {ACCENT};
                                  background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(34,211,166,10), stop:1 rgba(34,211,166,55)); }}
 QWidget#matchView QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(14,36,46,215), stop:1 rgba(7,20,28,228));
                                    border: 1px solid rgba(34,211,166,95); border-radius: 16px; }}

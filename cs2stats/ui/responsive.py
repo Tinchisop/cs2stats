@@ -6,8 +6,8 @@ más angosta, así la página puede achicarse y recién ahí se reacomoda."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QBoxLayout, QGridLayout, QLayout, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtWidgets import QBoxLayout, QFrame, QGridLayout, QLayout, QScrollArea, QSizePolicy, QWidget
 
 
 class FlowGrid(QWidget):
@@ -106,3 +106,41 @@ class StackRow(QWidget):
         if self.box.direction() != direction:
             self.box.setDirection(direction)
         super().resizeEvent(event)
+
+
+class SideScroll(QScrollArea):
+    """Tabla ancha dentro de una tarjeta: si no entra, se desliza de costado ahí adentro en vez de empujar la página."""
+
+    def __init__(self, inner: QWidget, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setWidgetResizable(True)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.viewport().setAutoFillBackground(False)
+        # Con selector por nombre: un estilo sin selector se heredaría a todas las celdas de la tabla.
+        self.viewport().setObjectName("sideScrollViewport")
+        self.viewport().setStyleSheet("QWidget#sideScrollViewport { background: transparent; }")
+        self.setWidget(inner)
+        inner.setAutoFillBackground(False)   # después de setWidget, que lo vuelve a prender y pinta la tabla de blanco
+
+    def _height(self) -> int:
+        inner = self.widget()
+        height = inner.sizeHint().height()
+        if inner.minimumSizeHint().width() > self.viewport().width():
+            height += self.horizontalScrollBar().sizeHint().height()
+        return height
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.widget().sizeHint().width(), self._height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(160, self._height())
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        height = self._height()
+        if height != self.height():
+            self.setFixedHeight(height)
+

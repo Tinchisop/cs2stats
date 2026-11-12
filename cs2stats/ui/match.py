@@ -15,9 +15,10 @@ from ..metrics import SOURCE_NAMES, aim_summary, map_label
 from .charts import RoundStrip
 from .match_parts import cell, color_legend, divider, glow, header_row, missing_note, player_row, team_rows, tone_color
 from .match_tabs import DuelsTab, ImpactTab, overview_tab, page, utility_tab, your_match_tab
+from .match_fx import PlayerCard, rating_pill
 from .motion import reveal, reveal_children
 from .replay import ReplayTab
-from .responsive import StackRow
+from .responsive import SideScroll, StackRow
 from .pages import card, result_text, scroll_page, short_date
 from .theme import (ACCENT, BAD, BG, CT_COLOR, GOOD, MID, MUTED, T_COLOR, fmt_num, fmt_pct, icon, label, panel,
                     rating_color)
@@ -84,6 +85,62 @@ def stat_tile(title: str, value: str, kind: str, tone: str) -> QFrame:
     return frame
 
 
+def wide_table() -> tuple[QWidget, QVBoxLayout]:
+    """Contenedor para las filas de una tabla ancha (va adentro de un SideScroll)."""
+    table = QWidget()
+    rows = QVBoxLayout(table)
+    rows.setContentsMargins(0, 0, 0, 0)
+    rows.setSpacing(4)
+    return table, rows
+
+
+class TabStrip(QWidget):
+    """Fila de pestañas: grandes si entran y más compactas si la ventana es angosta, así no empujan la página."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.row = QHBoxLayout(self)
+        self.row.setContentsMargins(0, 0, 0, 0)
+        self.row.setSpacing(8)
+        self.buttons: list[QPushButton] = []
+        self.compact = False
+        self._widths: dict[bool, int] = {}
+
+    def add(self, button: QPushButton) -> None:
+        self.buttons.append(button)
+        self.row.addWidget(button)
+        self._widths = {}
+
+    def finish(self) -> None:
+        self.row.addStretch(1)
+
+    def _set_compact(self, compact: bool) -> None:
+        self.compact = compact
+        self.row.setSpacing(4 if compact else 8)
+        for button in self.buttons:
+            button.setProperty("compact", compact)
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+    def _width(self, compact: bool) -> int:
+        """Ancho que ocupan las pestañas en cada tamaño (se mide una vez)."""
+        if compact not in self._widths:
+            before = self.compact
+            self._set_compact(compact)
+            self._widths[compact] = sum(b.sizeHint().width() for b in self.buttons) + (4 if compact else 8) * len(self.buttons)
+            self._set_compact(before)
+        return self._widths[compact]
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self._width(True), super().minimumSizeHint().height())
+
+    def resizeEvent(self, event):  # noqa: N802
+        compact = event.size().width() < self._width(False)
+        if compact != self.compact:
+            self._set_compact(compact)
+        super().resizeEvent(event)
+
+
 class MatchView(QWidget):
     """Detalle de una partida como página de la ventana principal (no una ventana aparte)."""
 
@@ -142,8 +199,7 @@ class MatchView(QWidget):
         self.header.setLayout(self._header(m, s))
         self.header.layout().setContentsMargins(0, 0, 0, 0)
         body.addWidget(self.header)
-        bar = QHBoxLayout()
-        bar.setSpacing(4)
+        bar = TabStrip()
         group = QButtonGroup(self)
         self.pages: dict[str, QWidget] = {}
         self.buttons: dict[str, QPushButton] = {}
@@ -162,12 +218,12 @@ class MatchView(QWidget):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(lambda _=False, k=key: self.show_tab(k))
             group.addButton(button)
-            bar.addWidget(button)
+            bar.add(button)
             self.buttons[key] = button
         self.replay_tab: ReplayTab = self._page("replay")
         self.replay_tab.build_requested.connect(lambda: self.replay_requested.emit(self.match_id))
-        bar.addStretch(1)
-        body.addLayout(bar)
+        bar.finish()
+        body.addWidget(bar)
         body.addLayout(holder)
         body.addStretch(1)
         self.current = ""
@@ -341,20 +397,21 @@ class MatchView(QWidget):
         return outer
 
     def _player_card(self, m: dict, s: dict) -> QFrame:
-        box = panel("playerCard")
-        row = QHBoxLayout(box)
-        row.setContentsMargins(18, 14, 20, 14)
-        row.setSpacing(14)
         me = next((p for p in m["scoreboard"] if p.get("me")), {})
+        # Si subiste de Premier o de ELO, la tarjeta festeja con el borde dorado y destellos.
+        went_up = ((m.get("rank_type") == 11 and m.get("rank_new") and (m.get("rank_change") or 0) > 0)
+                   or (self._faceit_entry(me) is not None and (m.get("elo_change") or 0) > 0))
+        box = PlayerCard(self.seed, bool(went_up))
+        row = QHBoxLayout(box)
+        row.setContentsMargins(18, 12, 20, 12)
+        row.setSpacing(14)
         name = m.get("my_name") or me.get("name") or ""
-        row.addWidget(Avatar(name, 66, circle=True, ring=ACCENT))
+        row.addWidget(glow(Avatar(name, 80, circle=True, ring=ACCENT), ACCENT, 26, 150))
         who = QVBoxLayout()
-        who.setSpacing(0)
+        who.setSpacing(2)
         who.addWidget(label(name, "cardPlayer"))
         who.addWidget(label(t("RATING"), "cardTitle"))
-        rating = label(fmt_num(s["rating"], 2), "bigValue")
-        rating.setStyleSheet(f"color: {rating_color(s['rating'])};")
-        who.addWidget(rating)
+        who.addWidget(rating_pill(s["rating"]), 0, Qt.AlignmentFlag.AlignLeft)
         row.addLayout(who)
         row.addWidget(divider())
 
@@ -498,7 +555,8 @@ class MatchView(QWidget):
         if not aim:
             layout.addWidget(label(missing_note(aim), "muted", wrap=True))
             return widget
-        layout.addWidget(header_row([(title, AIM_WIDTH, tip) for _k, title, tip, *_rest in AIM]))
+        table, table_layout = wide_table()
+        table_layout.addWidget(header_row([(title, AIM_WIDTH, tip) for _k, title, tip, *_rest in AIM]))
 
         def build(p: dict) -> QFrame:
             values = aim_summary(aim.get(str(p["steamid"]))) or {}
@@ -508,17 +566,20 @@ class MatchView(QWidget):
                 value = values.get(key)
                 cells.append(cell(fmt(value), AIM_WIDTH, tone_color(value, good, bad), p.get("me", False)))
             return player_row(p, cells)
-        team_rows(layout, players, build)
+        team_rows(table_layout, players, build)
+        layout.addWidget(SideScroll(table))
         color_legend(layout)
         if any((aim_summary(raw) or {}).get("preaim") is not None for raw in aim.values()):
             duels, duels_layout = card(t("Mira y duelos"), t("Cómo arrancan tus duelos y cómo te agarran · pasá el mouse por cada columna"))
             duels_layout.setSpacing(4)
             outer.addWidget(duels)
-            duels_layout.addWidget(header_row([(title, AIM_WIDTH, tip) for _k, title, tip, *_rest in DUELS]))
+            duels_table, duels_table_layout = wide_table()
+            duels_table_layout.addWidget(header_row([(title, AIM_WIDTH, tip) for _k, title, tip, *_rest in DUELS]))
 
             def build_duels(p: dict) -> QFrame:
                 values = aim_summary(aim.get(str(p["steamid"]))) or {}
                 return player_row(p, [cell(fmt(values.get(key)), AIM_WIDTH, tone_color(values.get(key), good, bad), p.get("me", False))
                                       for key, _title, _tip, fmt, good, bad in DUELS])
-            team_rows(duels_layout, players, build_duels)
+            team_rows(duels_table_layout, players, build_duels)
+            duels_layout.addWidget(SideScroll(duels_table))
         return widget

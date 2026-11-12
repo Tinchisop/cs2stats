@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QGridLayout, QHBoxLayout, QMessageBox, QProgressDialog, QPushButton,
                                QSizePolicy, QVBoxLayout, QWidget)
@@ -62,6 +62,7 @@ class ReplayScene:
         self.radar = radar_for(data.get("map", ""))
         self._base: QImage | None = None
         self._base_key = None
+        self.trails = True   # estela de los últimos segundos de cada jugador
         if self.radar:
             self.frame = self.radar.bounds()
             return
@@ -247,6 +248,8 @@ class ReplayScene:
         for when, killer, victim, weapon, head in rnd["kills"]:
             if when <= at:
                 killed_by[victim] = (when, killer)
+        if self.trails:
+            self._paint_trails(painter, to_screen, tracks, teams, spots, killed_by, at)
 
         # Jugadores: los muertos quedan como una cruz; vos con un aro turquesa.
         order = sorted(spots, key=lambda p: (p == self.me, spots[p][3] > 0))
@@ -293,6 +296,35 @@ class ReplayScene:
             self._paint_names(painter, to_screen, spots, killed_by)
 
         self._paint_hud(painter, rect, rnd, at, spots, killed_by)
+
+    TRAIL_SECONDS = 3.0
+
+    def _paint_trails(self, painter: QPainter, to_screen, tracks: dict, teams: dict, spots: dict, killed_by: dict,
+                      at: float) -> None:
+        """Por dónde vino cada jugador vivo en los últimos segundos: una estela que se apaga hacia atrás."""
+        per_second = 64 / self.step
+        for player, track in tracks.items():
+            spot = spots.get(player)
+            if not spot or spot[3] <= 0 or player in killed_by:
+                continue
+            count = len(track) // 4
+            end = max(0.0, min(count - 1, at * per_second))
+            first = max(0, int(end - self.TRAIL_SECONDS * per_second))
+            points = [to_screen(track[i * 4], track[i * 4 + 1]) for i in range(first, int(end) + 1)]
+            points.append(to_screen(spot[0], spot[1]))
+            if len(points) < 3:
+                continue
+            mine = player == self.me
+            color = QColor(ACCENT if mine else TEAM_COLORS.get(teams.get(player, ""), MUTED))
+            total = len(points) - 1
+            for index, (a, b) in enumerate(zip(points, points[1:])):
+                if a == b:
+                    continue
+                share = (index + 1) / total
+                color.setAlpha(int((235 if mine else 200) * share ** 1.2))
+                painter.setPen(QPen(color, (3.4 if mine else 2.6) * (0.45 + 0.55 * share), Qt.PenStyle.SolidLine,
+                                    Qt.PenCapStyle.RoundCap))
+                painter.drawLine(a, b)
 
     def _paint_names(self, painter: QPainter, to_screen, spots: dict, killed_by: dict) -> None:
         """Nombres de los vivos sin que se pisen: arriba del círculo y, si ahí ya hay otro, abajo o a un costado.
@@ -528,18 +560,35 @@ class ReplayPlayer(QWidget):
         controls = QHBoxLayout()
         controls.setSpacing(8)
         self.play_button = QPushButton()
-        self.play_button.setObjectName("roundButton")
-        self.play_button.setFixedSize(36, 36)
-        self.play_button.setStyleSheet("border-radius: 18px;")
+        self.play_button.setObjectName("playButton")
+        self.play_button.setFixedSize(40, 40)
+        self.play_button.setIcon(icon("play", TEXT, 18))
+        self.play_button.setIconSize(QSize(18, 18))
+        self.play_button.setToolTip(t("Play o pausa (Espacio)"))
         self.play_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.play_button.clicked.connect(self.toggle)
         controls.addWidget(self.play_button)
+        self.loop_button = None
+        if not clip:
+            next_button = QPushButton()
+            next_button.setObjectName("playButton")
+            next_button.setFixedSize(34, 34)
+            next_button.setStyleSheet("border-radius: 16px;")
+            next_button.setIcon(icon("next", TEXT, 16))
+            next_button.setToolTip(t("Siguiente ronda"))
+            next_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            next_button.clicked.connect(lambda: self.go_round(self.index + 1))
+            controls.addWidget(next_button)
         self.timeline = Timeline()
         self.timeline.seeked.connect(self.seek)
         controls.addWidget(self.timeline, 1)
         self.time_label = label("0:00", "smallMuted")
         self.time_label.setMinimumWidth(80)
         controls.addWidget(self.time_label)
+        layout.addLayout(controls)
+        # Segunda fila: velocidad, bucle y acciones. Así la línea de tiempo usa todo el ancho aunque la ventana sea angosta.
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
         speeds = QButtonGroup(self)
         for value in SPEEDS:
             seg = QPushButton(f"{value:g}×")
@@ -549,16 +598,27 @@ class ReplayPlayer(QWidget):
             seg.setCursor(Qt.CursorShape.PointingHandCursor)
             seg.clicked.connect(lambda _=False, v=value: setattr(self, "speed", v))
             speeds.addButton(seg)
-            controls.addWidget(seg)
+            actions.addWidget(seg)
+        if not clip:
+            # Repetir la ronda en bucle en vez de pasar sola a la siguiente; muestra la ronda y el total.
+            self.loop_button = QPushButton()
+            self.loop_button.setObjectName("segment")
+            self.loop_button.setCheckable(True)
+            self.loop_button.setIcon(icon("loop", TEXT, 16))
+            self.loop_button.setToolTip(t("Repetir esta ronda en bucle"))
+            self.loop_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.loop_button.toggled.connect(lambda on: self.loop_button.setIcon(icon("loop", ACCENT if on else TEXT, 16)))
+            actions.addWidget(self.loop_button)
+        actions.addStretch(1)
         save = button(t("Guardar clip") if clip else t("Guardar ronda"), "film")
         save.setToolTip(t("Guarda este tramo como video MP4 o GIF, sin abrir el juego"))
         save.clicked.connect(self.save)
-        controls.addWidget(save)
+        actions.addWidget(save)
         in_game = button(t("Abrir en CS2"), "external")
         in_game.setToolTip(t("Abre la demo real en CS2, en este momento de la ronda y con la cámara en tu jugador"))
         in_game.clicked.connect(self._open_in_game)
-        controls.addWidget(in_game)
-        layout.addLayout(controls)
+        actions.addWidget(in_game)
+        layout.addLayout(actions)
         layout.addWidget(label(t("Espacio: play o pausa · ← →: 5 segundos · turquesa: tus kills · rojo: tu muerte"),
                                "smallMuted", wrap=True))
         self.timer = QTimer(self)
@@ -583,6 +643,8 @@ class ReplayPlayer(QWidget):
         self.index = index
         if self.round_buttons:
             self.round_buttons[index].setChecked(True)
+        if self.loop_button is not None:
+            self.loop_button.setText(f" {self.scene.rounds[index]['n']}/{len(self.scene.rounds)}")
         rnd = self.scene.rounds[index]
         me = self.scene.me
         marks = []
@@ -612,12 +674,12 @@ class ReplayPlayer(QWidget):
         self.playing = True
         self.clock.start()
         self.timer.start()
-        self.play_button.setIcon(icon("pause", TEXT, 16))
+        self.play_button.setIcon(icon("pause", TEXT, 18))
 
     def pause(self) -> None:
         self.playing = False
         self.timer.stop()
-        self.play_button.setIcon(icon("play", TEXT, 16))
+        self.play_button.setIcon(icon("play", TEXT, 18))
 
     def toggle(self) -> None:
         self.pause() if self.playing else self.play()
@@ -627,8 +689,8 @@ class ReplayPlayer(QWidget):
         low, high = self.bounds()
         at = self.at + min(step, 0.5)
         if at >= high:
-            if self.clip:
-                at = low   # los clips se repiten en bucle
+            if self.clip or (self.loop_button is not None and self.loop_button.isChecked()):
+                at = low   # los clips (y la ronda con el bucle prendido) se repiten
             elif self.index + 1 < len(self.scene.rounds):
                 self.go_round(self.index + 1)
                 return

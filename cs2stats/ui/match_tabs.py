@@ -7,13 +7,14 @@ from collections import Counter
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-                               QVBoxLayout, QWidget)
+                               QSizePolicy, QVBoxLayout, QWidget)
 
 from ..assets import weapon_icon
 from ..i18n import t
 from ..metrics import impact_rating, player_numbers, scale_value, utility_rating, weapon_label
 from .detail_charts import DivergingBars, Gauge, MarkerBar, RoundImpact, ShareBar, signed
-from .match_parts import (NAME_WIDTH, cell, color_legend, header_row, missing_note, player_face, player_row,
+from .match_fx import Sparkline, VersusBadge
+from .match_parts import (NAME_WIDTH, cell, color_legend, glow, header_row, missing_note, player_face, player_row,
                           team_rows, tone_color)
 from .pages import card, chip, clear
 from .responsive import StackRow
@@ -219,19 +220,23 @@ def your_match_tab(m: dict, history: list[dict]) -> QWidget:
     row.addWidget(identity, 5, Qt.AlignmentFlag.AlignTop)
 
     previous = previous_matches(history, m)
+    # Los números de cada partida anterior se calculan una sola vez para todas las filas.
+    past = [player_numbers(h, me) for h in previous]
     box, layout = card(t("Esta partida"), t("contra tus últimas {0} partidas").format(len(previous)))
     layout.setSpacing(6)
     head = QHBoxLayout()
     head.setContentsMargins(14, 0, 14, 0)
     head.addStretch(1)
-    for head_text in (t("ESTA"), t("PROMEDIO")):
+    for head_text, width in ((t("TENDENCIA"), 140), (t("ESTA"), 90), (t("PROMEDIO"), 90)):
         heading = label(head_text, "cardTitle")
-        heading.setFixedWidth(90)
-        heading.setAlignment(Qt.AlignmentFlag.AlignRight)
+        heading.setFixedWidth(width)
+        heading.setAlignment(Qt.AlignmentFlag.AlignRight if width == 90 else Qt.AlignmentFlag.AlignCenter)
         head.addWidget(heading)
     layout.addLayout(head)
     for key, name, fmt, margin, higher in VERSUS:
-        value, average = mine.get(key), history_average(previous, me, key)
+        series = [n.get(key) for n in past]
+        known = [v for v in series if v is not None]
+        value, average = mine.get(key), (sum(known) / len(known) if known else None)
         color = TEXT
         if value is not None and average is not None and abs(value - average) >= margin:
             color = GOOD if (value > average) == higher else BAD
@@ -239,6 +244,9 @@ def your_match_tab(m: dict, history: list[dict]) -> QWidget:
         line_layout = QHBoxLayout(line)
         line_layout.setContentsMargins(14, 9, 14, 9)
         line_layout.addWidget(label(name, "body"), 1)
+        trend = Sparkline(series + [value], ACCENT if color == TEXT else color)
+        trend.setToolTip(t("Tus últimas {0} partidas y esta (el punto)").format(len(known)))
+        line_layout.addWidget(trend)
         this = label(fmt(value), "midValue")
         this.setStyleSheet(f"color: {color};")
         this.setFixedWidth(90)
@@ -465,11 +473,13 @@ class DuelsTab(QWidget):
                 bar_row.addWidget(label(fmt_num(mine, 0), "midValue"))
                 bar = ShareBar([("", int(mine), ACCENT), ("", int(theirs), "#3a3e46")], text=False)
                 bar.setFixedHeight(12)
-                bar.setFixedWidth(320)
-                bar_row.addWidget(bar)
+                bar.setMinimumWidth(120)   # se estira hasta 320 si hay lugar; en ventanas angostas se achica
+                bar.setMaximumWidth(320)
+                bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                bar_row.addWidget(bar, 1)
                 bar_row.addWidget(label(fmt_num(theirs, 0), "midValue"))
                 middle.addLayout(bar_row)
-                row.addLayout(middle)
+                row.addLayout(middle, 1)
                 continue
             col = QVBoxLayout()
             col.addWidget(label(t("KILLS"), "cardTitle"), 0, Qt.AlignmentFlag.AlignHCenter)
@@ -482,10 +492,11 @@ class DuelsTab(QWidget):
         row.addWidget(player_face(rival, 56))
         self.versus.addWidget(box)
 
-        weapons = QHBoxLayout()
-        weapons.setSpacing(16)
-        for killer, victim, title in ((me, rival, t("Tus kills contra {0}").format(rival["name"])),
-                                      (rival, me, t("Kills de {0} contra vos").format(rival["name"]))):
+        weapons = StackRow(10)   # si no entran lado a lado, quedan una arriba de la otra con el VS en el medio
+        for side, (killer, victim, title) in enumerate(((me, rival, t("Tus kills contra {0}").format(rival["name"])),
+                                                        (rival, me, t("Kills de {0} contra vos").format(rival["name"])))):
+            if side:
+                weapons.addWidget(VersusBadge(), 0, Qt.AlignmentFlag.AlignCenter)
             panel_box, layout = card(title)
             done = [k for k in self.kills if k[1] == str(killer["steamid"]) and k[2] == str(victim["steamid"])]
             if not done:
@@ -495,6 +506,7 @@ class DuelsTab(QWidget):
                 groups.setdefault(gun_group(k[3]), []).append(k)
             line = QHBoxLayout()
             line.setSpacing(18)
+            tint = CT_COLOR if killer is me else T_COLOR
             for group in ("snipers", "rifles", "mid", "pistols", "other"):
                 items = groups.get(group)
                 if not items:
@@ -503,7 +515,10 @@ class DuelsTab(QWidget):
                 col.setSpacing(4)
                 gun = Counter(k[3] for k in items).most_common(1)[0][0]
                 picture = QLabel()
-                picture.setPixmap(svg_pixmap(weapon_icon(gun if gun != "inferno" else "molotov"), TEXT, QSize(70, 24)))
+                # Silueta grande del arma más usada del grupo, con un brillo del color del lado (vos o el rival).
+                picture.setPixmap(svg_pixmap(weapon_icon(gun if gun != "inferno" else "molotov"), TEXT, QSize(100, 36)))
+                picture.setMinimumHeight(40)
+                glow(picture, tint, 18, 120)
                 col.addWidget(picture, 0, Qt.AlignmentFlag.AlignHCenter)
                 col.addWidget(label(GUN_NAMES[group], "cardTitle"), 0, Qt.AlignmentFlag.AlignHCenter)
                 hs = sum(1 for k in items if k[4])
@@ -514,7 +529,7 @@ class DuelsTab(QWidget):
             line.addStretch(1)
             layout.addLayout(line)
             weapons.addWidget(panel_box, 1)
-        self.versus.addLayout(weapons)
+        self.versus.addWidget(weapons)
 
     def _matrix(self) -> QFrame:
         box, layout = card(t("Matriz de duelos"), t("Kills de cada compañero contra cada rival · pasá el mouse para ver el daño"))
