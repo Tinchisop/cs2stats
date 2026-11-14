@@ -89,6 +89,12 @@ def match_message(match: dict, previous: list[dict]) -> str:
     if best:
         lines.append(t("Lo mejor de tu partida:"))
         lines += [f"• {text}" for text in best]
+    allies = [p for p in match.get("scoreboard") or [] if p.get("ally") and not p.get("me")]
+    top = max(allies, key=lambda p: p.get("rating") or 0, default=None)
+    if me and top and (top.get("rating") or 0) > (stats.get("rating") or 0):
+        lines.append(t("El mejor de tu equipo: {name} ({k}/{d}, {adr} ADR, rating {rating})",
+                       name=top.get("name") or "?", k=top.get("kills", 0), d=top.get("deaths", 0),
+                       adr=_num(top.get("adr") or 0), rating=_num(top.get("rating") or 0, 2)))
     if stats:
         lines.append(t("{k}/{d}/{a} · {adr} ADR · rating {rating}", k=stats.get("kills", 0), d=stats.get("deaths", 0),
                        a=stats.get("assists", 0), adr=_num(stats.get("adr") or 0), rating=_num(stats.get("rating") or 0, 2)))
@@ -100,5 +106,5 @@ def gsi_message(data: dict) -> str:
     lines = [_header(data.get("map") or "", int(data.get("score_us") or 0), int(data.get("score_them") or 0))]
     lines.append(t("{k} kills, {d} muertes, {a} asistencias y {mvp} MVP.", k=data.get("kills", 0), d=data.get("deaths", 0),
                    a=data.get("assists", 0), mvp=data.get("mvps", 0)))
-    lines.append(t("Cuando analice la demo vas a ver el detalle en CS2 Stats."))
+    lines.append(t("Valve no publicó la demo de esta partida, así que no hay ADR ni rating."))
     return "\n".join(lines)

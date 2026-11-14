@@ -19,7 +19,8 @@ EN = {
     "Encegueciste {n} rivales con flashes": "Blinded {n} enemies with flashes",
     "Tu mejor ronda: la {n}, con {k} kills": "Your best round: round {n}, with {k} kills",
     "{k} kills, {d} muertes, {a} asistencias y {mvp} MVP.": "{k} kills, {d} deaths, {a} assists and {mvp} MVPs.",
-    "Cuando analice la demo vas a ver el detalle en CS2 Stats.": "Once the demo is analyzed you'll see the details in CS2 Stats.",
+    "Valve no publicó la demo de esta partida, así que no hay ADR ni rating.": "Valve didn't publish this match's demo, so there's no ADR or rating.",
+    "El mejor de tu equipo: {name} ({k}/{d}, {adr} ADR, rating {rating})": "Top of your team: {name} ({k}/{d}, {adr} ADR, rating {rating})",
 
     # Comparación con tu rango (benchmarks)
     "jugadores {0} ({1}) de tus partidas": "{0} players ({1}) from your matches",

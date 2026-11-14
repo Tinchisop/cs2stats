@@ -140,7 +140,7 @@ def sync_steam(store: Store, settings: Settings, log: Callable[[str], None], qui
     return imported
 
 
-MESSAGE_WAIT = 3 * 60      # si en 3 minutos no se analizó la demo, sale un mensaje corto con lo que mandó CS2
+MESSAGE_WAIT = 60 * 60     # se espera la demo para mandar el resumen completo; el corto solo sale si en 1 hora no llegó
 MESSAGE_WINDOW = 3 * 3600  # partidas que todavía merecen mensaje al importarse, aunque no haya llegado el aviso de CS2
 
 
